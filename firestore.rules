@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users/{userId}
+    //   - uid: string
+    //   - email: string
+    //   - displayName: string
+    //   - role: string ('teacher' | 'student')
+    // Collection: assessments/{assessmentId}
+    //   - teacherId: string
+    //   - title: string
+    //   - classCode: string
+    //   - status: string ('draft' | 'active' | 'closed')
+    // Collection: assessments/{assessmentId}/questions/{questionId}
+    // Collection: submissions/{submissionId}
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher') ||
+          true // Allow authenticated users to create/manage their own assessments
+        );
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+    }
+
+    // Assessments Collection
+    match /assessments/{assessmentId} {
+      // Teachers can read their own assessments; Students can read active assessments by class code or direct read
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.teacherId == request.auth.uid;
+
+      // Subcollection: Questions
+      match /questions/{questionId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && 
+          get(/databases/$(database)/documents/assessments/$(assessmentId)).data.teacherId == request.auth.uid;
+      }
+    }
+
+    // Submissions Collection
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        get(/databases/$(database)/documents/assessments/$(resource.data.assessmentId)).data.teacherId == request.auth.uid
+      );
+      allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.studentId == request.auth.uid ||
+        get(/databases/$(database)/documents/assessments/$(resource.data.assessmentId)).data.teacherId == request.auth.uid
+      );
+    }
+  }
+}
