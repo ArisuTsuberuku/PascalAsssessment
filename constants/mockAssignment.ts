@@ -3,7 +3,7 @@ import { Assignment } from "@/types/assignment";
 export const mockAssignment: Assignment = {
   assignmentId: "phys-hw-dynamics-101",
   title: "Physics Homework 101: Newton's Laws & Mechanical Dynamics",
-  pdfUrl: "/pdfs/physics_dynamics_practice.pdf",
+  pdfUrl: "https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf",
   baseResolution: {
     width: 1000,
     height: 1414,

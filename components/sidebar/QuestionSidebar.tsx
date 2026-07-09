@@ -1,15 +1,33 @@
+"use client";
+
 import React from "react";
-import { Assignment, SidebarItem } from "@/types/assignment";
-import { HelpCircle, CheckCircle2, Award, ListFilter } from "lucide-react";
+import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
+import { SidebarItem, ItemType } from "@/types/assignment";
+import {
+  ListOrdered,
+  TextCursorInput,
+  ChevronDownSquare,
+  Calculator,
+  CheckSquare,
+  AlignLeft,
+  Trash2,
+  HelpCircle,
+  ListPlus,
+  Plus,
+  FormInput,
+  PenTool,
+  CheckCircle2,
+} from "lucide-react";
 
-interface QuestionSidebarProps {
-  assignment: Assignment;
-}
+export default function QuestionSidebar() {
+  const { draft, addSidebarItem, updateItem, deleteItem, isPreviewMode } =
+    useAssignmentEditorStore();
 
-export default function QuestionSidebar({ assignment }: QuestionSidebarProps) {
-  // Extract all sidebar items across all sections
+  if (!draft) return null;
+
+  // Gather all items placed in sidebar
   const sidebarItems: SidebarItem[] = [];
-  assignment.sections.forEach((section) => {
+  draft.sections.forEach((section) => {
     section.items.forEach((item) => {
       if (item.placement === "sidebar") {
         sidebarItems.push(item as SidebarItem);
@@ -17,85 +35,396 @@ export default function QuestionSidebar({ assignment }: QuestionSidebarProps) {
     });
   });
 
-  const totalPoints = sidebarItems.reduce(
-    (sum, item) => sum + (item.points || 0),
-    0
-  );
-
   return (
-    <div className="h-full flex flex-col p-4">
-      {/* Sidebar Title & Summary */}
-      <div className="mb-4 pb-3 border-b border-slate-800">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <ListFilter className="h-4 w-4 text-indigo-400" />
-            <span>Câu hỏi bên Sidebar</span>
-          </h3>
-          <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[11px] font-semibold text-indigo-300">
-            {sidebarItems.length} câu
+    <aside className="h-full w-full bg-slate-900 flex flex-col overflow-hidden">
+      {/* Top Header */}
+      <div className="p-3.5 border-b border-slate-800 bg-slate-900/95 shrink-0">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold text-white flex items-center gap-1.5">
+            <ListPlus className="h-4 w-4 text-purple-400" />
+            {isPreviewMode
+              ? "Bài làm (Chế độ Học sinh)"
+              : "Danh sách Câu hỏi Sidebar"}
+          </h2>
+          <span className="rounded-full bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[11px] font-semibold text-purple-300">
+            {sidebarItems.length} Câu
           </span>
         </div>
-        <p className="text-xs text-slate-400">
-          Hiển thị cố định ở bảng 20% bên phải • Tổng {totalPoints} điểm
+        <p className="text-[10px] text-slate-400 mt-1">
+          {isPreviewMode
+            ? "Trả lời các câu hỏi bên dưới."
+            : "Các câu hỏi hiển thị cho học sinh trả lời ở bảng điều khiển bên phải."}
         </p>
       </div>
 
-      {/* Scrollable Questions List */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+      {/* List of Sidebar Question Cards */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-3.5">
         {sidebarItems.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-xs text-slate-500">
-            Không có câu hỏi nào thuộc nhóm Sidebar.
+          <div className="h-44 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-4">
+            <HelpCircle className="h-7 w-7 text-slate-600 mb-2" />
+            <p className="text-xs font-semibold text-slate-400">
+              Chưa có câu hỏi nào trong Sidebar
+            </p>
           </div>
         ) : (
-          sidebarItems.map((item) => (
+          sidebarItems.map((item, index) => (
             <div
               key={item.id}
-              className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 shadow-md hover:border-indigo-500/40 transition-all"
+              className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-lg hover:border-slate-700 transition-all flex flex-col gap-3"
             >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <span className="text-xs font-bold text-white leading-tight">
-                  {item.name}
-                </span>
-                <span className="shrink-0 inline-flex items-center gap-1 rounded bg-indigo-500/15 px-2 py-0.5 text-[11px] font-semibold text-indigo-300">
-                  <Award className="h-3 w-3" />
-                  {item.points}đ
-                </span>
+              {/* Card Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-purple-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                    #{index + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={item.name}
+                    readOnly={isPreviewMode}
+                    onChange={(e) =>
+                      updateItem(item.id, { name: e.target.value })
+                    }
+                    className="bg-transparent text-xs font-bold text-white border-b border-transparent hover:border-slate-700 focus:border-purple-500 focus:outline-none px-1"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded px-2 py-0.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      readOnly={isPreviewMode}
+                      value={item.points}
+                      onChange={(e) =>
+                        updateItem(item.id, {
+                          points: Number(e.target.value) || 0,
+                        })
+                      }
+                      className="w-8 bg-transparent text-right text-xs font-mono font-semibold text-purple-300 focus:outline-none"
+                    />
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      đ
+                    </span>
+                  </div>
+
+                  {!isPreviewMode && (
+                    <button
+                      onClick={() => deleteItem(item.id)}
+                      title="Xóa câu hỏi này"
+                      className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="mb-2">
-                <span className="inline-block rounded bg-slate-800 px-2 py-0.5 text-[10px] uppercase font-semibold text-slate-300">
-                  {item.type}
-                </span>
+              {/* Prompt Input */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase font-semibold text-slate-400">
+                  Đề bài / Yêu cầu
+                </label>
+                <textarea
+                  rows={2}
+                  readOnly={isPreviewMode}
+                  value={item.prompt || ""}
+                  onChange={(e) =>
+                    updateItem(item.id, { prompt: e.target.value })
+                  }
+                  placeholder="Nhập câu hỏi cho học sinh..."
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all resize-none"
+                />
               </div>
 
-              {item.prompt && (
-                <p className="text-xs text-slate-300 leading-relaxed mb-3">
-                  {item.prompt}
-                </p>
-              )}
-
-              {/* Render Type-specific Preview */}
+              {/* Specific Config based on Type */}
               {item.type === "multiple-choice" && (
-                <div className="space-y-1.5 mt-2 pt-2 border-t border-slate-800/80">
+                <div className="space-y-1.5 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-purple-300 uppercase">
+                    Các lựa chọn:
+                  </span>
                   {item.config.options.map((opt) => (
                     <div
                       key={opt.id}
-                      className="flex items-center gap-2 rounded-lg border border-slate-800/60 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-300"
+                      className="flex items-center gap-2 text-xs"
                     >
-                      <span className="font-mono font-bold text-indigo-400">
-                        •
-                      </span>
-                      <span>{opt.text}</span>
+                      <input
+                        type="radio"
+                        name={`correct-${item.id}`}
+                        checked={
+                          isPreviewMode
+                            ? false
+                            : item.config.correctHash === opt.id
+                        }
+                        disabled={isPreviewMode}
+                        onChange={() =>
+                          !isPreviewMode &&
+                          updateItem(item.id, {
+                            config: { ...item.config, correctHash: opt.id },
+                          })
+                        }
+                        className="text-purple-600 focus:ring-purple-500"
+                      />
+                      <input
+                        type="text"
+                        value={opt.text}
+                        readOnly={isPreviewMode}
+                        onChange={(e) => {
+                          if (item.type !== "multiple-choice" || isPreviewMode)
+                            return;
+                          const updatedOptions = item.config.options.map((o) =>
+                            o.id === opt.id
+                              ? { ...o, text: e.target.value }
+                              : o
+                          );
+                          updateItem(item.id, {
+                            config: {
+                              ...item.config,
+                              options: updatedOptions,
+                            },
+                          });
+                        }}
+                        className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-purple-500 focus:outline-none"
+                      />
                     </div>
                   ))}
                 </div>
               )}
 
               {item.type === "math-input" && (
-                <div className="mt-2 pt-2 border-t border-slate-800/80">
-                  <div className="flex items-center justify-between text-xs font-mono bg-slate-900/90 rounded px-2.5 py-1.5 border border-slate-800 text-emerald-400">
-                    <span>Biểu thức chuẩn:</span>
-                    <strong>{item.config.correctMathjs}</strong>
+                <div className="space-y-1 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-indigo-300 uppercase">
+                    {isPreviewMode ? "Trả lời công thức:" : "Công thức (MathJS):"}
+                  </span>
+                  {!isPreviewMode ? (
+                    <input
+                      type="text"
+                      value={item.config.correctMathjs}
+                      onChange={(e) => {
+                        if (item.type !== "math-input") return;
+                        updateItem(item.id, {
+                          config: {
+                            ...item.config,
+                            correctMathjs: e.target.value,
+                          },
+                        });
+                      }}
+                      placeholder="ví dụ: 2*x + 1"
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:border-purple-500 focus:outline-none"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Nhập câu trả lời toán học..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:border-purple-500 focus:outline-none"
+                    />
+                  )}
+                </div>
+              )}
+
+              {item.type === "short-input" && (
+                <div className="space-y-1 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-sky-300 uppercase">
+                    {isPreviewMode
+                      ? "câu trả lời của bạn:"
+                      : "Đáp án trả lời ngắn (cách nhau bởi dấu phẩy):"}
+                  </span>
+                  {!isPreviewMode ? (
+                    <input
+                      type="text"
+                      value={item.config.correctAnswers.join(", ")}
+                      onChange={(e) => {
+                        if (item.type !== "short-input") return;
+                        const answers = e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        updateItem(item.id, {
+                          config: {
+                            ...item.config,
+                            correctAnswers:
+                              answers.length > 0 ? answers : [""],
+                          },
+                        });
+                      }}
+                      placeholder="Nhập đáp án đúng..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Nhập câu trả lời..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
+                    />
+                  )}
+                </div>
+              )}
+
+              {item.type === "true-false" && (
+                <div className="space-y-2 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-emerald-300 uppercase block">
+                    {isPreviewMode
+                      ? "Chọn đáp án:"
+                      : "Chọn đáp án đúng (Đúng / Sai):"}
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isPreviewMode}
+                      onClick={() => {
+                        if (item.type !== "true-false" || isPreviewMode) return;
+                        updateItem(item.id, {
+                          config: { ...item.config, correctAnswer: true },
+                        });
+                      }}
+                      className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
+                        !isPreviewMode && item.config.correctAnswer === true
+                          ? "bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow"
+                          : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      Đúng (True)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isPreviewMode}
+                      onClick={() => {
+                        if (item.type !== "true-false" || isPreviewMode) return;
+                        updateItem(item.id, {
+                          config: { ...item.config, correctAnswer: false },
+                        });
+                      }}
+                      className={`py-1.5 px-3 rounded-lg border text-xs font-bold transition-all ${
+                        !isPreviewMode && item.config.correctAnswer === false
+                          ? "bg-rose-600/20 border-rose-500 text-rose-300 shadow"
+                          : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      Sai (False)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {item.type === "drop-down" && (
+                <div className="space-y-2 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-amber-300 uppercase block">
+                    Chọn từ danh sách:
+                  </span>
+                  {!isPreviewMode ? (
+                    <>
+                      <div className="space-y-1.5">
+                        {item.config.options.map((opt) => (
+                          <div
+                            key={opt.id}
+                            className="flex items-center gap-2 text-xs"
+                          >
+                            <input
+                              type="radio"
+                              name={`correct-dropdown-${item.id}`}
+                              checked={item.config.correctHash === opt.id}
+                              onChange={() => {
+                                if (item.type !== "drop-down") return;
+                                updateItem(item.id, {
+                                  config: {
+                                    ...item.config,
+                                    correctHash: opt.id,
+                                  },
+                                });
+                              }}
+                              className="text-amber-500 focus:ring-amber-500"
+                            />
+                            <input
+                              type="text"
+                              value={opt.text}
+                              onChange={(e) => {
+                                if (item.type !== "drop-down") return;
+                                const updatedOptions =
+                                  item.config.options.map((o) =>
+                                    o.id === opt.id
+                                      ? { ...o, text: e.target.value }
+                                      : o
+                                  );
+                                updateItem(item.id, {
+                                  config: {
+                                    ...item.config,
+                                    options: updatedOptions,
+                                  },
+                                });
+                              }}
+                              className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-amber-500 focus:outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <select className="w-full rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-xs text-slate-200">
+                      <option value="">-- Chọn đáp án --</option>
+                      {item.config.options.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.text}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {item.type === "essay" && (
+                <div className="space-y-2 border-t border-slate-800/80 pt-2">
+                  <textarea
+                    rows={3}
+                    readOnly={!isPreviewMode}
+                    placeholder={
+                      isPreviewMode
+                        ? "Học sinh nhập bài tự luận tại đây..."
+                        : "Vùng trả lời tự luận (Học sinh sẽ nhập)..."
+                    }
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 resize-none"
+                  />
+                </div>
+              )}
+
+              {item.type === "multiple-selection" && (
+                <div className="space-y-2 border-t border-slate-800/80 pt-2">
+                  <span className="text-[10px] font-semibold text-purple-300 uppercase block">
+                    Chọn nhiều đáp án:
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {item.config.options.map((o) => {
+                      const isChecked = !isPreviewMode
+                        ? (item.config.correctHashes || []).includes(o.id)
+                        : false;
+                      return (
+                        <label
+                          key={o.id}
+                          className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={isPreviewMode}
+                            onChange={() => {
+                              if (isPreviewMode) return;
+                              const current = item.config.correctHashes || [];
+                              const newHashes = current.includes(o.id)
+                                ? current.filter((h) => h !== o.id)
+                                : [...current, o.id];
+                              updateItem(item.id, {
+                                config: {
+                                  ...item.config,
+                                  correctHashes: newHashes,
+                                },
+                              });
+                            }}
+                            className="rounded-sm text-purple-600 focus:ring-purple-500"
+                          />
+                          <span>{o.text}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -103,6 +432,62 @@ export default function QuestionSidebar({ assignment }: QuestionSidebarProps) {
           ))
         )}
       </div>
-    </div>
+
+      {/* BOTTOM TOOL RIBBON: 6 Pear Assessment Inspired Question Types */}
+      <div className="p-3.5 border-t border-slate-800 bg-slate-950 shrink-0 max-h-[48%] overflow-y-auto shadow-2xl z-10">
+        <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2.5">
+          Thêm câu hỏi Sidebar (Pear Assessment):
+        </span>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => addSidebarItem("multiple-choice")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/20 hover:border-purple-500/60 hover:text-purple-300 transition-all active:scale-95"
+          >
+            <ListOrdered className="h-4 w-4 text-purple-400 shrink-0" />
+            <span className="truncate">Trắc nghiệm</span>
+          </button>
+
+          <button
+            onClick={() => addSidebarItem("short-input")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-sky-600/20 hover:border-sky-500/60 hover:text-sky-300 transition-all active:scale-95"
+          >
+            <TextCursorInput className="h-4 w-4 text-sky-400 shrink-0" />
+            <span className="truncate">Trả lời ngắn</span>
+          </button>
+
+          <button
+            onClick={() => addSidebarItem("drop-down")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-amber-600/20 hover:border-amber-500/60 hover:text-amber-300 transition-all active:scale-95"
+          >
+            <ChevronDownSquare className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="truncate">Chọn từ danh sách</span>
+          </button>
+
+          <button
+            onClick={() => addSidebarItem("math-input")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-indigo-600/20 hover:border-indigo-500/60 hover:text-indigo-300 transition-all active:scale-95"
+          >
+            <Calculator className="h-4 w-4 text-indigo-400 shrink-0" />
+            <span className="truncate">Công thức</span>
+          </button>
+
+          <button
+            onClick={() => addSidebarItem("true-false")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-emerald-600/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-all active:scale-95"
+          >
+            <CheckSquare className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span className="truncate">Đúng / Sai</span>
+          </button>
+
+          <button
+            onClick={() => addSidebarItem("essay")}
+            className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-pink-600/20 hover:border-pink-500/60 hover:text-pink-300 transition-all active:scale-95"
+          >
+            <AlignLeft className="h-4 w-4 text-pink-400 shrink-0" />
+            <span className="truncate">Tự luận</span>
+          </button>
+        </div>
+      </div>
+    </aside>
   );
 }

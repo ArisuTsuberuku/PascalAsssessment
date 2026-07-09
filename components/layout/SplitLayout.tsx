@@ -17,7 +17,7 @@ export default function SplitLayout({
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 text-slate-100">
       {/* Optional Top Header Bar */}
       {headerContent && (
         <div className="shrink-0 border-b border-slate-800 bg-slate-900/90 z-20">
@@ -26,7 +26,7 @@ export default function SplitLayout({
       )}
 
       {/* 80/20 Main Split Layout Container */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* LEFT 80% CONTAINER (w-full lg:w-4/5) */}
         <div className="w-full lg:w-4/5 h-full overflow-hidden flex flex-col">
           {leftContent}
