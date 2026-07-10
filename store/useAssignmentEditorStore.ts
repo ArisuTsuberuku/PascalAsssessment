@@ -30,6 +30,14 @@ interface AssignmentEditorState {
 
   activePdfPage: number;
   setActivePdfPage: (page: number) => void;
+  activeStudentTool: string;
+  setActiveStudentTool: (tool: string) => void;
+  activeSubmissionId: string | null;
+  setActiveSubmissionId: (id: string | null) => void;
+  pdfPages: Record<number, any>;
+  setPdfPage: (pageNumber: number, pageObj: any) => void;
+  studentAnswers: Record<string, any>;
+  setStudentAnswer: (itemId: string, answer: any) => void;
   duplicateCanvasItem: (itemId: string) => void;
   duplicateSidebarItem: (itemId: string) => void;
 
@@ -59,9 +67,34 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>(
     isSaving: false,
     isPreviewMode: false,
     activePdfPage: 1,
+    activeStudentTool: "pointer",
+    activeSubmissionId: null,
+    pdfPages: {},
+    studentAnswers: {},
     error: null,
 
     setActivePdfPage: (page: number) => set({ activePdfPage: page }),
+    setActiveStudentTool: (tool: string) => set({ activeStudentTool: tool }),
+    setActiveSubmissionId: (id: string | null) => set({ activeSubmissionId: id }),
+    setPdfPage: (pageNumber: number, pageObj: any) =>
+      set((state) => ({
+        pdfPages: { ...state.pdfPages, [pageNumber]: pageObj },
+      })),
+    setStudentAnswer: (itemId: string, answer: any) =>
+      set((state) => {
+        const newAnswers = { ...state.studentAnswers };
+        if (
+          answer === null ||
+          answer === undefined ||
+          answer === "" ||
+          (Array.isArray(answer) && answer.length === 0)
+        ) {
+          delete newAnswers[itemId];
+        } else {
+          newAnswers[itemId] = answer;
+        }
+        return { studentAnswers: newAnswers };
+      }),
 
     togglePreviewMode: () =>
       set((state) => ({ isPreviewMode: !state.isPreviewMode })),

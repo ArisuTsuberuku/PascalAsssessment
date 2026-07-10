@@ -15,8 +15,16 @@ import {
   MousePointerClick,
   ArrowDownUp,
   Columns,
-  Link,
+  Link as LinkIcon,
   Highlighter,
+  MousePointer2,
+  Pen,
+  Eraser,
+  Type,
+  Smile,
+  Minus,
+  Image as ImageIcon,
+  Mic,
 } from "lucide-react";
 import { ItemType } from "@/types/assignment";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
@@ -31,6 +39,115 @@ export default function CanvasToolbar({
   const addCanvasItem = useAssignmentEditorStore(
     (state) => state.addCanvasItem
   );
+  const isPreviewMode = useAssignmentEditorStore(
+    (state) => state.isPreviewMode
+  );
+
+  // Phase 1: State Management connected to store
+  const activeStudentTool = useAssignmentEditorStore(
+    (state) => state.activeStudentTool
+  );
+  const setActiveStudentTool = useAssignmentEditorStore(
+    (state) => state.setActiveStudentTool
+  );
+
+  // Phase 2: Dynamic Styling Helper
+  const getToolClass = (toolName: string) =>
+    activeStudentTool === toolName
+      ? "p-2 bg-purple-600 text-white rounded shadow-md transition-all scale-105"
+      : "p-2 hover:bg-slate-700/50 rounded text-slate-300 hover:text-white transition-all";
+
+  if (isPreviewMode) {
+    return (
+      <div className="sticky top-4 z-40 flex justify-center pointer-events-none mb-2">
+        <div className="pointer-events-auto flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-lg border border-slate-700 shadow-xl">
+          <button
+            onClick={() => setActiveStudentTool("pointer")}
+            title="Con trỏ chuột"
+            className={getToolClass("pointer")}
+          >
+            <MousePointer2 size={18} />
+          </button>
+
+          <div className="w-px h-5 bg-slate-700 mx-1"></div>
+
+          <button
+            onClick={() => setActiveStudentTool("pen")}
+            title="Bút vẽ"
+            className={getToolClass("pen")}
+          >
+            <Pen size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("highlighter")}
+            title="Bút dạ quang"
+            className={getToolClass("highlighter")}
+          >
+            <Highlighter size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("eraser")}
+            title="Tẩy / Xóa"
+            className={getToolClass("eraser")}
+          >
+            <Eraser size={18} />
+          </button>
+
+          <div className="w-px h-5 bg-slate-700 mx-1"></div>
+
+          <button
+            onClick={() => setActiveStudentTool("text")}
+            title="Thêm văn bản"
+            className={getToolClass("text")}
+          >
+            <Type size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("smile")}
+            title="Nhãn dán / Biểu tượng"
+            className={getToolClass("smile")}
+          >
+            <Smile size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("line")}
+            title="Vẽ đường thẳng"
+            className={getToolClass("line")}
+          >
+            <Minus size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("link")}
+            title="Đính kèm liên kết"
+            className={getToolClass("link")}
+          >
+            <LinkIcon size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("image")}
+            title="Chèn hình ảnh"
+            className={getToolClass("image")}
+          >
+            <ImageIcon size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveStudentTool("mic")}
+            title="Ghi âm câu trả lời"
+            className={getToolClass("mic")}
+          >
+            <Mic size={18} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const tools: {
     type: ItemType;
@@ -125,7 +242,7 @@ export default function CanvasToolbar({
     {
       type: "matching",
       label: "Nối cột",
-      icon: <Link className="h-4 w-4" />,
+      icon: <LinkIcon className="h-4 w-4" />,
       colorClass:
         "hover:text-orange-400 hover:border-orange-500/60 hover:bg-orange-500/10",
     },

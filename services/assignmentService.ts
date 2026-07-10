@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc, collection, getDocs, query, where, serverTimestamp } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
 import { Assignment } from "@/types/assignment";
 import { mockAssignment } from "@/constants/mockAssignment";
 
@@ -26,11 +26,16 @@ export async function getAssignment(
 }
 
 /**
- * Fetch all assignment documents from Firestore.
+ * Fetch all assignment documents from Firestore for the current teacher.
  */
-export async function getAllAssignments(): Promise<Assignment[]> {
+export async function getAllAssignments(teacherId?: string): Promise<Assignment[]> {
   try {
-    const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
+    const currentTeacherId = teacherId || auth?.currentUser?.uid;
+    const assignmentsRef = collection(db, COLLECTION_NAME);
+    const q = currentTeacherId
+      ? query(assignmentsRef, where("teacherId", "==", currentTeacherId))
+      : assignmentsRef;
+    const querySnapshot = await getDocs(q);
     const assignments: Assignment[] = [];
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
@@ -48,15 +53,17 @@ export async function getAllAssignments(): Promise<Assignment[]> {
 
 /**
  * Seed initial mock assignment data into Firestore under ID 'test-123'
- * (and optionally also under targetId if specified for testing).
  */
 export async function initMockAssignmentToDB(
   targetId: string = "test-123"
 ): Promise<void> {
   try {
-    const seedData: Assignment = {
+    const currentTeacherId = auth?.currentUser?.uid || "mock-teacher-id";
+    const seedData: any = {
       ...mockAssignment,
       assignmentId: targetId,
+      teacherId: currentTeacherId,
+      updatedAt: serverTimestamp(),
     };
     const docRef = doc(db, COLLECTION_NAME, targetId);
     await setDoc(docRef, seedData);

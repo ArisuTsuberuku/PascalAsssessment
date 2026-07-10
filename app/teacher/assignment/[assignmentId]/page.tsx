@@ -7,8 +7,8 @@ import { getAssignment } from "@/services/assignmentService";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { generateId } from "@/utils/generateId";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, setDoc } from "firebase/firestore";
-import { storage, db } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { storage, db, auth } from "@/lib/firebase";
 import dynamic from "next/dynamic";
 import SplitLayout from "@/components/layout/SplitLayout";
 const PdfCanvasWrapper = dynamic(
@@ -58,12 +58,19 @@ export default function AssignmentEditorPage({ params }: PageProps) {
 
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isUnauthorized, setIsUnauthorized] = useState<boolean>(false);
 
   // Initialize Draft on Mount / Cleanup on Unmount
   useEffect(() => {
     let isMounted = true;
 
     async function init() {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        if (isMounted) setIsUnauthorized(true);
+        return;
+      }
+
       const isNew = params.assignmentId === "new" || params.assignmentId === "new-assignment";
       if (isNew) {
         initBlankDraft();
@@ -71,13 +78,17 @@ export default function AssignmentEditorPage({ params }: PageProps) {
         try {
           const existing = await getAssignment(params.assignmentId);
           if (isMounted && existing) {
+            if (existing.teacherId && existing.teacherId !== currentUser.uid) {
+              setIsUnauthorized(true);
+              return;
+            }
             loadDraft(existing);
           } else if (isMounted) {
-            initBlankDraft();
+            setIsUnauthorized(true);
           }
         } catch (err) {
           console.error("Error loading assignment:", err);
-          if (isMounted) initBlankDraft();
+          if (isMounted) setIsUnauthorized(true);
         }
       }
     }
@@ -96,6 +107,13 @@ export default function AssignmentEditorPage({ params }: PageProps) {
     setSaveSuccess(false);
 
     try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setSaveError("Vui lòng đăng nhập lại để lưu bài.");
+        setSaving(false);
+        return;
+      }
+
       const isNew = params.assignmentId === "new" || params.assignmentId === "new-assignment";
       const finalId = isNew ? generateId() : params.assignmentId;
       let finalPdfUrl = draft?.pdfUrl || "";
@@ -107,11 +125,13 @@ export default function AssignmentEditorPage({ params }: PageProps) {
         finalPdfUrl = await getDownloadURL(storageRef);
       }
 
-      // 2. Prepare final draft object
+      // 2. Prepare final draft object securely injecting teacherId and updatedAt
       const finalDraft = {
         ...draft,
         assignmentId: finalId,
         pdfUrl: finalPdfUrl,
+        teacherId: currentUser.uid,
+        updatedAt: serverTimestamp(),
       };
 
       // 3. Save to Firestore
@@ -131,7 +151,7 @@ export default function AssignmentEditorPage({ params }: PageProps) {
 
       // 5. Cleanup & Route
       useAssignmentEditorStore.getState().clearPendingPdf();
-      loadDraft(finalDraft);
+      loadDraft(finalDraft as any);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
 
@@ -145,6 +165,29 @@ export default function AssignmentEditorPage({ params }: PageProps) {
       setSaving(false);
     }
   };
+
+  if (isUnauthorized) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-950 p-6 text-slate-100">
+        <div className="flex max-w-md flex-col items-center text-center rounded-2xl border border-red-500/30 bg-slate-900/90 p-8 shadow-2xl">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/20 text-red-400 border border-red-500/30">
+            <AlertTriangle className="h-7 w-7" />
+          </div>
+          <h1 className="text-xl font-bold text-white mb-2">⛔ Cảnh báo: Bạn không có quyền truy cập đề kiểm tra này!</h1>
+          <p className="text-sm text-slate-400 mb-6">
+            Bài kiểm tra này thuộc về một tài khoản giáo viên khác hoặc bạn chưa được phân quyền truy cập.
+          </p>
+          <Link
+            href="/teacher/dashboard"
+            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Quay lại Dashboard</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !draft) {
     return (

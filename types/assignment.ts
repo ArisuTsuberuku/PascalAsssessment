@@ -472,4 +472,7 @@ export interface Assignment {
   pdfUrl: string;
   baseResolution: BaseResolution;
   sections: Section[];
+  teacherId?: string;
+  updatedAt?: any;
+  createdAt?: any;
 }

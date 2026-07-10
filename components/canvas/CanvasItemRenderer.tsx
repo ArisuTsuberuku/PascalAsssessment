@@ -14,7 +14,7 @@ import {
 } from "@/types/assignment";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { Rnd } from "react-rnd";
-import { GripVertical, GripHorizontal, Plus, Check } from "lucide-react";
+import { GripVertical, GripHorizontal, Plus, Check, Wand2 } from "lucide-react";
 import MathLiveInput from "./MathLiveInput";
 import MatchingQuestionRenderer from "./MatchingQuestionRenderer";
 import TextareaAutosize from "react-textarea-autosize";
@@ -28,17 +28,164 @@ interface CanvasItemRendererProps {
   item: CanvasItem;
   isPinned?: boolean;
   isPreviewMode?: boolean;
+  pdfPage?: any;
+}
+
+/**
+ * Automatically detects coordinates of A, B, C, D anchors in the PDF text layer
+ * within the question's bounding box and snaps multiple-choice / multiple-selection
+ * options to those positions.
+ */
+export async function autoSnapOptions(
+  item: CanvasItem,
+  pdfPageInput?: any
+): Promise<void> {
+  if (item.type !== "multiple-choice" && item.type !== "multiple-selection") {
+    return;
+  }
+
+  const storeState = useAssignmentEditorStore.getState();
+  const pdfPages = storeState.pdfPages || {};
+  const activePage = storeState.activePdfPage;
+  const draft = storeState.draft;
+  const pageNum = item.pageNumber || activePage || 1;
+  const pdfPage = pdfPageInput || pdfPages[pageNum];
+
+  if (!pdfPage || typeof pdfPage.getTextContent !== "function") {
+    console.warn(`[AutoSnap] pdfPage for page ${pageNum} not available yet.`);
+    return;
+  }
+
+  try {
+    const textContent = await pdfPage.getTextContent();
+    const viewport = pdfPage.getViewport({ scale: 1 });
+    const baseW = draft?.baseResolution?.width || 1000;
+    const baseH = draft?.baseResolution?.height || 1414;
+
+    const boxX = item.boundingBox?.x ?? (item.config as any)?.position?.x ?? 0;
+    const boxY = item.boundingBox?.y ?? (item.config as any)?.position?.y ?? 0;
+    const boxW =
+      item.boundingBox?.width ?? (item.config as any)?.size?.width ?? 300;
+    const boxH =
+      item.boundingBox?.height ?? (item.config as any)?.size?.height ?? 100;
+
+    const detectedMap: Record<string, { x: number; y: number }> = {};
+    const regex = /(?:^|\s)([A-D])[\.\)]/g;
+
+    for (const textItem of textContent.items) {
+      if (!textItem || !textItem.str) continue;
+      const str = textItem.str;
+      const transform = (textItem as any).transform;
+      if (!transform || transform.length < 6) continue;
+
+      const itemWidth = (textItem as any).width || 0;
+      const strLen = Math.max(1, str.length);
+
+      let match: RegExpExecArray | null;
+      regex.lastIndex = 0;
+      while ((match = regex.exec(str)) !== null) {
+        const letter = match[1].toUpperCase();
+        if (detectedMap[letter]) continue;
+
+        const charIndex = match.index + match[0].indexOf(match[1]);
+        const offsetX_pdf = transform[4] + (charIndex / strLen) * itemWidth;
+        const offsetY_pdf = transform[5];
+
+        const [ptX, ptY] = viewport.convertToViewportPoint(
+          offsetX_pdf,
+          offsetY_pdf
+        );
+        const virtX = (ptX / viewport.width) * baseW;
+        const virtY = (ptY / viewport.height) * baseH;
+
+        if (
+          virtX >= boxX &&
+          virtX <= boxX + boxW &&
+          virtY >= boxY &&
+          virtY <= boxY + boxH
+        ) {
+          const relX = virtX - boxX;
+          const relY = virtY - boxY;
+          detectedMap[letter] = {
+            x: Math.max(0, Math.round(relX - 11)),
+            y: Math.max(0, Math.round(relY - 24)),
+          };
+        }
+      }
+    }
+
+    const options: MultipleChoiceOption[] =
+      (item.config as any)?.options &&
+        (item.config as any).options.length > 0
+        ? (item.config as any).options
+        : [
+          { id: "opt-a", text: "A" },
+          { id: "opt-b", text: "B" },
+          { id: "opt-c", text: "C" },
+          { id: "opt-d", text: "D" },
+        ];
+
+    const requiredLetters = ["A", "B", "C", "D"];
+    const foundCount = requiredLetters.filter(
+      (char) => detectedMap[char] !== undefined
+    ).length;
+
+    // Graceful Fallback: If scan yields fewer than 4 distinct A-D anchors, keep default layout
+    if (foundCount < 4) {
+      console.log(
+        `[AutoSnap] Detected ${foundCount}/4 anchors inside box for item ${item.id}. Keeping default layout.`
+      );
+      return;
+    }
+
+    const updatedOptions = options.map(
+      (opt: MultipleChoiceOption, idx: number) => {
+        const char = opt.text
+          ? opt.text.trim().toUpperCase()
+          : String.fromCharCode(65 + idx);
+        const detectedPos = detectedMap[char];
+        if (detectedPos) {
+          return {
+            ...opt,
+            position: detectedPos,
+          };
+        }
+        return opt;
+      }
+    );
+
+    console.log(
+      `[AutoSnap] Snapping options A-D for item ${item.id}:`,
+      detectedMap
+    );
+    storeState.updateCanvasItemConfig(item.id, { options: updatedOptions });
+  } catch (error) {
+    console.error(`[AutoSnap] Error during autoSnapOptions:`, error);
+  }
 }
 
 export default function CanvasItemRenderer({
   item,
   isPinned = false,
   isPreviewMode = false,
+  pdfPage,
 }: CanvasItemRendererProps) {
   const updateCanvasItemConfig = useAssignmentEditorStore(
     (state) => state.updateCanvasItemConfig
   );
+  const studentAnswers = useAssignmentEditorStore(
+    (state) => state.studentAnswers
+  );
+  const setStudentAnswer = useAssignmentEditorStore(
+    (state) => state.setStudentAnswer
+  );
   const [studentState, setStudentState] = React.useState<any>({});
+
+  React.useEffect(() => {
+    if (isPreviewMode && Object.keys(studentState).length > 0) {
+      setStudentAnswer(item.id, studentState);
+    }
+  }, [studentState, isPreviewMode, item.id, setStudentAnswer]);
 
   const config = item.config || {};
   const rootPos = (config as any).position || { x: 4, y: 4 };
@@ -78,9 +225,29 @@ export default function CanvasItemRenderer({
 
       return (
         <div className="w-full h-full relative overflow-hidden">
+          {!isPreviewMode && isPinned && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                autoSnapOptions(item, pdfPage);
+              }}
+              className="absolute top-1 right-1 z-30 bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] px-2 py-1 rounded shadow flex items-center gap-1"
+            >
+              <Wand2 size={12} /> Quét tọa độ A-D
+            </button>
+          )}
           {options.map((opt, idx) => {
+            const currentAnswerVal = studentAnswers[item.id];
+            const currentAnswerArr: string[] = Array.isArray(currentAnswerVal)
+              ? currentAnswerVal
+              : typeof currentAnswerVal === "string" &&
+                currentAnswerVal.trim().length > 0
+              ? currentAnswerVal.split(",")
+              : [];
             const isSelected = isPreviewMode
-              ? studentState.selectedHash === opt.id
+              ? studentState.selectedHash === opt.id ||
+                currentAnswerArr.includes(opt.id)
               : correctHash === opt.id;
             const posX =
               opt.position?.x !== undefined ? opt.position.x : idx * 36 + 4;
@@ -109,16 +276,17 @@ export default function CanvasItemRenderer({
                         ...prev,
                         selectedHash: opt.id,
                       }));
+                      setStudentAnswer(item.id, [opt.id]);
                     } else {
                       updateCanvasItemConfig(item.id, { correctHash: opt.id });
                     }
                   }}
-                  className={`h-7 w-7 rounded-full text-xs font-bold transition-all shadow-sm flex items-center justify-center select-none ${isPinned
+                  className={`flex items-center justify-center w-[22px] h-[22px] text-[13px] font-semibold leading-none select-none rounded-full transition-colors border shadow-sm ${isPinned
                     ? "cursor-grab active:cursor-grabbing ring-1 ring-amber-400/60"
                     : "cursor-pointer"
                     } ${isSelected
-                      ? "bg-purple-600 text-white ring-2 ring-purple-300 scale-105"
-                      : "bg-slate-900/70 text-slate-200 border border-slate-600/80 hover:bg-slate-800/90"
+                      ? "bg-purple-600 text-white border-purple-400 ring-2 ring-purple-300"
+                      : "bg-slate-900/80 text-slate-200 border-slate-600/80 hover:bg-slate-800"
                     }`}
                 >
                   {opt.text || opt.id.replace("opt-", "").toUpperCase()}
@@ -172,9 +340,29 @@ export default function CanvasItemRenderer({
 
       return (
         <div className="w-full h-full relative overflow-hidden">
+          {!isPreviewMode && isPinned && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                autoSnapOptions(item, pdfPage);
+              }}
+              className="absolute top-1 right-1 z-30 bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] px-2 py-1 rounded shadow flex items-center gap-1"
+            >
+              <Wand2 size={12} /> Quét tọa độ A-D
+            </button>
+          )}
           {options.map((opt, idx) => {
+            const currentAnswerVal = studentAnswers[item.id];
+            const currentAnswerArr: string[] = Array.isArray(currentAnswerVal)
+              ? currentAnswerVal
+              : typeof currentAnswerVal === "string" &&
+                currentAnswerVal.trim().length > 0
+              ? currentAnswerVal.split(",")
+              : [];
             const isSelected = isPreviewMode
-              ? (studentState.selectedHashes || []).includes(opt.id)
+              ? (studentState.selectedHashes || []).includes(opt.id) ||
+                currentAnswerArr.includes(opt.id)
               : correctHashes.includes(opt.id);
             const posX =
               opt.position?.x !== undefined ? opt.position.x : idx * 36 + 4;
@@ -200,7 +388,7 @@ export default function CanvasItemRenderer({
                     e.stopPropagation();
                     if (isPreviewMode) {
                       const prevHashes: string[] =
-                        studentState.selectedHashes || [];
+                        studentState.selectedHashes || currentAnswerArr;
                       const exists = prevHashes.includes(opt.id);
                       const next = exists
                         ? prevHashes.filter((id) => id !== opt.id)
@@ -209,16 +397,17 @@ export default function CanvasItemRenderer({
                         ...prev,
                         selectedHashes: next,
                       }));
+                      setStudentAnswer(item.id, next);
                     } else {
                       toggleSelection(opt.id);
                     }
                   }}
-                  className={`h-7 w-7 rounded-sm text-xs font-bold transition-all shadow-sm flex items-center justify-center select-none ${isPinned
+                  className={`flex items-center justify-center w-[22px] h-[22px] text-[13px] font-semibold leading-none select-none rounded-sm transition-colors border shadow-sm ${isPinned
                     ? "cursor-grab active:cursor-grabbing ring-1 ring-amber-400/60"
                     : "cursor-pointer"
                     } ${isSelected
-                      ? "bg-purple-600 text-white ring-2 ring-purple-300 scale-105"
-                      : "bg-slate-900/70 text-slate-200 border border-slate-600/80 hover:bg-slate-800/90"
+                      ? "bg-purple-600 text-white border-purple-400 ring-2 ring-purple-300"
+                      : "bg-slate-900/80 text-slate-200 border-slate-600/80 hover:bg-slate-800"
                     }`}
                 >
                   {opt.text || opt.id.replace("opt-", "").toUpperCase()}
