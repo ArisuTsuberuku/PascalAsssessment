@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import CanvasToolbar from "@/components/canvas/CanvasToolbar";
 import InteractiveCanvasItem from "@/components/canvas/InteractiveCanvasItem";
+import DrawingLayer from "@/components/canvas/DrawingLayer";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
@@ -55,6 +56,7 @@ function PageCanvasLayer({
 }: PageCanvasLayerProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(850);
+  const [containerHeight, setContainerHeight] = useState<number>(1200);
   const setActivePdfPage = useAssignmentEditorStore(
     (state) => state.setActivePdfPage
   );
@@ -70,6 +72,9 @@ function PageCanvasLayer({
       for (const entry of entries) {
         if (entry.contentRect.width > 0) {
           setContainerWidth(entry.contentRect.width);
+        }
+        if (entry.contentRect.height > 0) {
+          setContainerHeight(entry.contentRect.height);
         }
       }
     });
@@ -162,43 +167,12 @@ function PageCanvasLayer({
         />
       </div>
 
-      {/* PHASE 3: FUNCTIONAL DRAWING SVG OVERLAY */}
-      <svg
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
-        className={`absolute inset-0 w-full h-full z-20 ${
-          !isLiveMonitor &&
-          (activeStudentTool === "pen" || activeStudentTool === "highlighter")
-            ? "pointer-events-auto touch-none cursor-crosshair"
-            : "pointer-events-none"
-        }`}
-      >
-        {displayedPaths.map((p) => (
-          <path
-            key={p.id}
-            d={pointsToSvgPath(p.points)}
-            stroke={p.color || "#ef4444"}
-            strokeWidth={p.strokeWidth || 2.5}
-            opacity={p.color === "#facc15" ? 0.45 : 1}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-        {currentPath && (
-          <path
-            d={pointsToSvgPath(currentPath.points)}
-            stroke={currentPath.color}
-            strokeWidth={currentPath.strokeWidth}
-            opacity={currentPath.color === "#facc15" ? 0.45 : 1}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-      </svg>
+      {/* PHASE 3: REACT-KONVA HIGH PERFORMANCE DRAWING LAYER */}
+      <DrawingLayer
+        width={containerWidth}
+        height={containerHeight || Math.round(containerWidth * 1.414)}
+        pageNumber={pageNum}
+      />
 
       {/* REACT-RND INTERACTIVE OVERLAYS */}
       <div className="absolute inset-0 z-30 pointer-events-none">
@@ -242,6 +216,7 @@ export default function PdfCanvasWrapper({
     studentAnswers,
     activeStudentTool,
     activeSubmissionId,
+    zoomLevel,
   } = useAssignmentEditorStore();
 
   const draft = initialData || storeDraft;
@@ -422,8 +397,11 @@ export default function PdfCanvasWrapper({
         </div>
       </div>
 
-      {/* PDF Document Container */}
-      <div className="w-full max-w-[850px] flex flex-col items-center gap-8">
+      {/* PDF Document Container with Zoom Scale */}
+      <div
+        className="w-full max-w-[850px] flex flex-col items-center gap-8 transition-transform duration-200 origin-top"
+        style={{ transform: `scale(${zoomLevel || 1})` }}
+      >
         <Document
           file={activePdfSource}
           onLoadSuccess={onDocumentLoadSuccess}

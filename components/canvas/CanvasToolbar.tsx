@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef } from "react";
 import {
   ListOrdered,
   TextCursorInput,
@@ -13,18 +13,19 @@ import {
   FormInput,
   PenTool,
   MousePointerClick,
+  MousePointer2,
+  Pen,
+  Highlighter,
+  Eraser,
+  Type,
+  Minus,
   ArrowDownUp,
   Columns,
   Link as LinkIcon,
-  Highlighter,
-  MousePointer2,
-  Pen,
-  Eraser,
-  Type,
-  Smile,
-  Minus,
-  Image as ImageIcon,
-  Mic,
+  Undo2,
+  Redo2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { ItemType } from "@/types/assignment";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
@@ -50,6 +51,35 @@ export default function CanvasToolbar({
   const setActiveStudentTool = useAssignmentEditorStore(
     (state) => state.setActiveStudentTool
   );
+  const activeColor = useAssignmentEditorStore((state) => state.activeColor);
+  const setActiveColor = useAssignmentEditorStore(
+    (state) => state.setActiveColor
+  );
+  const activeStrokeWidth = useAssignmentEditorStore(
+    (state) => state.activeStrokeWidth
+  );
+  const setActiveStrokeWidth = useAssignmentEditorStore(
+    (state) => state.setActiveStrokeWidth
+  );
+  const undo = useAssignmentEditorStore((state) => state.undo);
+  const redo = useAssignmentEditorStore((state) => state.redo);
+  const undoStack = useAssignmentEditorStore((state) => state.undoStack);
+  const redoStack = useAssignmentEditorStore((state) => state.redoStack);
+  const zoomLevel = useAssignmentEditorStore((state) => state.zoomLevel);
+  const setZoomLevel = useAssignmentEditorStore((state) => state.setZoomLevel);
+
+  // Phase 2: Customizable 5-color Palette State & Ref
+  const [palette, setPalette] = useState<string[]>([
+    "#ef4444",
+    "#000000",
+    "#3b82f6",
+    "#eab308",
+    "#6d28d9",
+  ]);
+  const [editingColorIndex, setEditingColorIndex] = useState<number | null>(
+    null
+  );
+  const colorInputRef = useRef<HTMLInputElement>(null);
 
   // Phase 2: Dynamic Styling Helper
   const getToolClass = (toolName: string) =>
@@ -57,10 +87,47 @@ export default function CanvasToolbar({
       ? "p-2 bg-purple-600 text-white rounded shadow-md transition-all scale-105"
       : "p-2 hover:bg-slate-700/50 rounded text-slate-300 hover:text-white transition-all";
 
+  const penSizes = [
+    { label: "Mảnh", value: 2 },
+    { label: "Vừa", value: 4 },
+    { label: "Dày", value: 8 },
+  ];
+
+  const highlighterSizes = [
+    { label: "Mảnh", value: 12 },
+    { label: "Vừa", value: 20 },
+    { label: "Dày", value: 30 },
+  ];
+
   if (isPreviewMode) {
+    const showSubMenu =
+      activeStudentTool === "pen" ||
+      activeStudentTool === "highlighter" ||
+      activeStudentTool === "text" ||
+      activeStudentTool === "line";
+
+    const sizes =
+      activeStudentTool === "highlighter" ? highlighterSizes : penSizes;
+
     return (
-      <div className="sticky top-4 z-40 flex justify-center pointer-events-none mb-2">
-        <div className="pointer-events-auto flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-lg border border-slate-700 shadow-xl">
+      <div className="sticky top-4 z-40 flex flex-col items-center pointer-events-none mb-2 gap-2">
+        {/* Hidden Native Color Picker */}
+        <input
+          type="color"
+          ref={colorInputRef}
+          className="hidden"
+          onChange={(e) => {
+            const newColor = e.target.value;
+            if (editingColorIndex !== null) {
+              const newPalette = [...palette];
+              newPalette[editingColorIndex] = newColor;
+              setPalette(newPalette);
+              setActiveColor(newColor);
+            }
+          }}
+        />
+
+        <div className="pointer-events-auto flex items-center gap-1 bg-slate-900/95 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-700 shadow-xl flex-wrap justify-center">
           <button
             onClick={() => setActiveStudentTool("pointer")}
             title="Con trỏ chuột"
@@ -69,7 +136,7 @@ export default function CanvasToolbar({
             <MousePointer2 size={18} />
           </button>
 
-          <div className="w-px h-5 bg-slate-700 mx-1"></div>
+          <div className="w-px h-5 bg-slate-700 mx-1.5"></div>
 
           <button
             onClick={() => setActiveStudentTool("pen")}
@@ -88,14 +155,12 @@ export default function CanvasToolbar({
           </button>
 
           <button
-            onClick={() => setActiveStudentTool("eraser")}
-            title="Tẩy / Xóa"
-            className={getToolClass("eraser")}
+            onClick={() => setActiveStudentTool("line")}
+            title="Vẽ đường thẳng"
+            className={getToolClass("line")}
           >
-            <Eraser size={18} />
+            <Minus size={18} />
           </button>
-
-          <div className="w-px h-5 bg-slate-700 mx-1"></div>
 
           <button
             onClick={() => setActiveStudentTool("text")}
@@ -106,45 +171,116 @@ export default function CanvasToolbar({
           </button>
 
           <button
-            onClick={() => setActiveStudentTool("smile")}
-            title="Nhãn dán / Biểu tượng"
-            className={getToolClass("smile")}
+            onClick={() => setActiveStudentTool("eraser")}
+            title="Tẩy / Xóa"
+            className={getToolClass("eraser")}
           >
-            <Smile size={18} />
+            <Eraser size={18} />
           </button>
 
+          <div className="w-px h-5 bg-slate-700 mx-1.5"></div>
+
+          {/* Undo Button */}
           <button
-            onClick={() => setActiveStudentTool("line")}
-            title="Vẽ đường thẳng"
-            className={getToolClass("line")}
+            onClick={undo}
+            disabled={undoStack.length === 0}
+            title="Hoàn tác (Undo)"
+            className={`p-2 rounded transition-all ${
+              undoStack.length === 0
+                ? "opacity-30 cursor-not-allowed text-slate-500"
+                : "hover:bg-slate-700/50 text-slate-300 hover:text-white"
+            }`}
           >
-            <Minus size={18} />
+            <Undo2 size={18} />
           </button>
 
+          {/* Redo Button */}
           <button
-            onClick={() => setActiveStudentTool("link")}
-            title="Đính kèm liên kết"
-            className={getToolClass("link")}
+            onClick={redo}
+            disabled={redoStack.length === 0}
+            title="Làm lại (Redo)"
+            className={`p-2 rounded transition-all ${
+              redoStack.length === 0
+                ? "opacity-30 cursor-not-allowed text-slate-500"
+                : "hover:bg-slate-700/50 text-slate-300 hover:text-white"
+            }`}
           >
-            <LinkIcon size={18} />
+            <Redo2 size={18} />
           </button>
 
+          <div className="w-px h-5 bg-slate-700 mx-1.5"></div>
+
+          {/* Zoom Out */}
           <button
-            onClick={() => setActiveStudentTool("image")}
-            title="Chèn hình ảnh"
-            className={getToolClass("image")}
+            onClick={() => setZoomLevel((prev) => Math.max(0.5, prev - 0.1))}
+            title="Thu nhỏ"
+            className="p-2 hover:bg-slate-700/50 rounded text-slate-300 hover:text-white transition-all"
           >
-            <ImageIcon size={18} />
+            <ZoomOut size={18} />
           </button>
 
+          {/* Zoom In */}
           <button
-            onClick={() => setActiveStudentTool("mic")}
-            title="Ghi âm câu trả lời"
-            className={getToolClass("mic")}
+            onClick={() => setZoomLevel((prev) => Math.min(2.5, prev + 0.1))}
+            title="Phóng to"
+            className="p-2 hover:bg-slate-700/50 rounded text-slate-300 hover:text-white transition-all"
           >
-            <Mic size={18} />
+            <ZoomIn size={18} />
           </button>
         </div>
+
+        {/* Sub-Menu: Customizable Color Palette & Stroke Width Picker */}
+        {showSubMenu && (
+          <div className="pointer-events-auto flex items-center gap-3 bg-slate-900/95 backdrop-blur-md px-4 py-1.5 rounded-xl border border-slate-700 shadow-xl animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Customizable 5-color Swatches */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase text-slate-400 mr-1">
+                Màu:
+              </span>
+              {palette.map((color, index) => (
+                <button
+                  key={index}
+                  onClick={() => setActiveColor(color)}
+                  onDoubleClick={() => {
+                    setEditingColorIndex(index);
+                    colorInputRef.current?.click();
+                  }}
+                  className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                    activeColor === color
+                      ? "border-white scale-110 shadow-sm"
+                      : "border-transparent hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: color }}
+                  title="Click để chọn, Nháy đúp để đổi màu"
+                />
+              ))}
+            </div>
+
+            <div className="w-px h-4 bg-slate-700"></div>
+
+            {/* Stroke Sizes */}
+            {activeStudentTool !== "text" && (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase text-slate-400 mr-1">
+                  Nét:
+                </span>
+                {sizes.map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => setActiveStrokeWidth(s.value)}
+                    className={`px-2 py-0.5 rounded text-xs font-semibold transition-all ${
+                      activeStrokeWidth === s.value
+                        ? "bg-purple-600 text-white shadow"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }

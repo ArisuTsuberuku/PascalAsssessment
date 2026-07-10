@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Play, Users, UserCheck } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { auth } from "@/lib/firebase";
+import { signInAnonymously, signOut } from "firebase/auth";
 
 function StudentLobbyForm() {
   const router = useRouter();
@@ -16,6 +18,7 @@ function StudentLobbyForm() {
   const [mode, setMode] = useState<"individual" | "group">("individual");
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     const codeParam = searchParams.get("code");
@@ -45,29 +48,57 @@ function StudentLobbyForm() {
       return;
     }
 
-    const submissionId =
-      mode === "group"
-        ? `${cleanCode}_team_${cleanTeam.replace(/\s+/g, "")}`
-        : `${cleanCode}_ind_${cleanName.replace(/\s+/g, "")}`;
+    setJoining(true);
 
-    const sessionData = {
-      classCode: cleanCode,
-      studentName: cleanName,
-      mode,
-      teamName: mode === "group" ? cleanTeam : null,
-      submissionId,
-    };
+    try {
+      // 1. CỰC KỲ QUAN TRỌNG: Đăng xuất tài khoản cũ (nếu có) trên máy này
+      await signOut(auth);
 
-    localStorage.setItem("pascal_student_session", JSON.stringify(sessionData));
+      // 2. Tạo một danh tính ẩn danh HOÀN TOÀN MỚI
+      const userCredential = await signInAnonymously(auth);
+      const firebaseStudentUid = userCredential.user.uid;
 
-    // Update global app store if needed
-    setStudentInfo(
-      cleanCode,
-      cleanName,
-      mode === "group" ? "Group" : "Individual"
-    );
+      const submissionId =
+        mode === "group"
+          ? `${cleanCode}_team_${cleanTeam.replace(/\s+/g, "")}`
+          : `${cleanCode}_ind_${cleanName.replace(/\s+/g, "")}`;
 
-    router.push(`/play/${cleanCode}`);
+      // 3. Lưu thông tin vào Session Storage (để phân tách độc lập giữa các Tab)
+      sessionStorage.setItem("studentName", cleanName);
+      sessionStorage.setItem("studentId", firebaseStudentUid);
+
+      const sessionData = {
+        classCode: cleanCode,
+        studentName: cleanName,
+        studentId: firebaseStudentUid,
+        mode,
+        teamName: mode === "group" ? cleanTeam : null,
+        submissionId,
+      };
+
+      sessionStorage.setItem(
+        "pascal_student_session",
+        JSON.stringify(sessionData)
+      );
+      localStorage.setItem(
+        "pascal_student_session",
+        JSON.stringify(sessionData)
+      );
+
+      // Update global app store if needed
+      setStudentInfo(
+        cleanCode,
+        cleanName,
+        mode === "group" ? "Group" : "Individual"
+      );
+
+      // 3. Redirect to the session
+      router.push(`/play/${cleanCode}`);
+    } catch (err: any) {
+      console.error("Lỗi khi tạo phiên ẩn danh:", err);
+      setError("Không thể kết nối an ninh phòng thi. Vui lòng thử lại.");
+      setJoining(false);
+    }
   };
 
   return (
@@ -157,10 +188,11 @@ function StudentLobbyForm() {
 
         <button
           type="submit"
-          className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white shadow-lg shadow-purple-600/30 transition-all hover:bg-purple-500 active:scale-[0.99]"
+          disabled={joining}
+          className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white shadow-lg shadow-purple-600/30 transition-all hover:bg-purple-500 active:scale-[0.99] disabled:opacity-50"
         >
           <Play className="h-4 w-4 fill-current" />
-          <span>Vào làm bài ngay</span>
+          <span>{joining ? "Đang kết nối..." : "Vào Phòng Thi"}</span>
         </button>
       </form>
     </div>

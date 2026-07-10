@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
   Assignment,
   AssessmentItem,
@@ -6,6 +7,7 @@ import {
   SidebarItem,
   CanvasItem,
   BoundingBox,
+  Annotation,
 } from "@/types/assignment";
 
 interface AssignmentEditorState {
@@ -32,6 +34,20 @@ interface AssignmentEditorState {
   setActivePdfPage: (page: number) => void;
   activeStudentTool: string;
   setActiveStudentTool: (tool: string) => void;
+  activeColor: string;
+  setActiveColor: (color: string) => void;
+  activeStrokeWidth: number;
+  setActiveStrokeWidth: (width: number) => void;
+  annotations: Annotation[];
+  setAnnotations: (
+    updater: Annotation[] | ((prev: Annotation[]) => Annotation[])
+  ) => void;
+  zoomLevel: number;
+  setZoomLevel: (updater: number | ((prev: number) => number)) => void;
+  undoStack: Annotation[][];
+  redoStack: Annotation[][];
+  undo: () => void;
+  redo: () => void;
   activeSubmissionId: string | null;
   setActiveSubmissionId: (id: string | null) => void;
   pdfPages: Record<number, any>;
@@ -57,8 +73,9 @@ interface AssignmentEditorState {
   deleteItem: (itemId: string) => void;
 }
 
-export const useAssignmentEditorStore = create<AssignmentEditorState>(
-  (set, get) => ({
+export const useAssignmentEditorStore = create<AssignmentEditorState>()(
+  persist(
+    (set, get) => ({
     draft: null,
     pendingPdfFile: null,
     pdfPreviewUrl: null,
@@ -66,8 +83,15 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>(
     isLoading: true,
     isSaving: false,
     isPreviewMode: false,
+    activeTool: "select",
+    activeStudentTool: "pen",
+    activeColor: "#6d28d9",
+    activeStrokeWidth: 3,
     activePdfPage: 1,
-    activeStudentTool: "pointer",
+    annotations: [],
+    zoomLevel: 1,
+    undoStack: [],
+    redoStack: [],
     activeSubmissionId: null,
     pdfPages: {},
     studentAnswers: {},
@@ -75,6 +99,43 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>(
 
     setActivePdfPage: (page: number) => set({ activePdfPage: page }),
     setActiveStudentTool: (tool: string) => set({ activeStudentTool: tool }),
+    setActiveColor: (color: string) => set({ activeColor: color }),
+    setActiveStrokeWidth: (width: number) => set({ activeStrokeWidth: width }),
+    setAnnotations: (updater) =>
+      set((state) => {
+        const nextAnnotations =
+          typeof updater === "function" ? updater(state.annotations) : updater;
+        return {
+          undoStack: [...state.undoStack, state.annotations],
+          redoStack: [],
+          annotations: nextAnnotations,
+        };
+      }),
+    setZoomLevel: (updater) =>
+      set((state) => ({
+        zoomLevel:
+          typeof updater === "function" ? updater(state.zoomLevel) : updater,
+      })),
+    undo: () =>
+      set((state) => {
+        if (state.undoStack.length === 0) return state;
+        const previous = state.undoStack[state.undoStack.length - 1];
+        return {
+          undoStack: state.undoStack.slice(0, -1),
+          redoStack: [...state.redoStack, state.annotations],
+          annotations: previous,
+        };
+      }),
+    redo: () =>
+      set((state) => {
+        if (state.redoStack.length === 0) return state;
+        const next = state.redoStack[state.redoStack.length - 1];
+        return {
+          undoStack: [...state.undoStack, state.annotations],
+          redoStack: state.redoStack.slice(0, -1),
+          annotations: next,
+        };
+      }),
     setActiveSubmissionId: (id: string | null) => set({ activeSubmissionId: id }),
     setPdfPage: (pageNumber: number, pageObj: any) =>
       set((state) => ({
@@ -936,5 +997,12 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>(
         };
       });
     },
-  })
-);
+  }),
+  {
+    name: "student-exam-storage",
+    partialize: (state) => ({
+      studentAnswers: state.studentAnswers,
+      annotations: state.annotations,
+    }),
+  }
+));

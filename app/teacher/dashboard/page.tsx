@@ -16,7 +16,15 @@ import {
   Loader2,
   ShieldAlert,
 } from "lucide-react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
 import { Assignment } from "@/types/assignment";
@@ -112,6 +120,53 @@ export default function TeacherDashboardPage() {
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
   );
+
+  const handleStartLiveSession = async (
+    assignment: Assignment,
+    classCode?: string
+  ) => {
+    try {
+      // Force wait for auth state to be resolved (Production safety)
+      await auth.authStateReady();
+
+      const user = auth.currentUser;
+      if (!user?.uid) {
+        alert(
+          "Phiên đăng nhập đã hết hạn. Vui lòng tải lại trang và đăng nhập lại."
+        );
+        return;
+      }
+
+      // THE MAGIC FIX: Force refresh the token to sync with Firebase Backend
+      // This guarantees request.auth will not be null in Security Rules
+      await user.getIdToken(true);
+
+      // 1. Native JS Random ID Generation (No uuid package needed)
+      const newSessionId =
+        classCode ||
+        Math.random().toString(36).substring(2, 10).toUpperCase();
+
+      // 2. Clean payload
+      const sessionPayload = {
+        assignmentId: assignment.assignmentId,
+        assignmentName: assignment.title || "Bài tập chưa đặt tên",
+        teacherId: user.uid,
+        status: "active",
+        classCode: newSessionId,
+        createdAt: serverTimestamp(),
+      };
+
+      // 3. Write to Firestore
+      await setDoc(doc(db, "sessions", newSessionId), sessionPayload);
+
+      // 4. Redirect
+      router.push(`/teacher/session/${newSessionId}`);
+    } catch (error: any) {
+      console.error("Lỗi chi tiết khi tạo Live Session:", error);
+      // Hiển thị chính xác mã lỗi để dễ debug
+      alert(`Lỗi: ${error?.message || "Không thể kết nối Firebase"}`);
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100">
@@ -305,13 +360,15 @@ export default function TeacherDashboardPage() {
                               <ExternalLink className="h-3.5 w-3.5" />
                               <span>Chỉnh sửa 80/20</span>
                             </Link>
-                            <Link
-                              href={`/teacher/session/${classCode}`}
-                              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors inline-flex items-center gap-1.5"
+                            <button
+                              onClick={() =>
+                                handleStartLiveSession(assignment, classCode)
+                              }
+                              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-sm"
                             >
                               <Play className="h-3.5 w-3.5" />
                               <span>Live Session</span>
-                            </Link>
+                            </button>
                           </div>
                         </td>
                       </tr>

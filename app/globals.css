@@ -7,3 +7,29 @@
     @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30;
   }
 }
+
+/* MathLive Styling Overrides - Fix Contrast & Dark Keyboard */
+.math-input-wrapper math-field {
+  width: 100%;
+  min-height: 48px;
+  font-size: 18px;
+  background-color: #f1f5f9; /* slate-100 */
+  color: #0f172a; /* slate-900 (Dark text) */
+  border: 1px solid #cbd5e1; /* slate-300 */
+  border-radius: 6px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.math-input-wrapper math-field:focus-within {
+  border-color: #6d28d9; /* Purple ring */
+  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+}
+
+/* Style the virtual keyboard if it pops up */
+math-field {
+  --keyboard-background: #1e293b;
+  --keyboard-toolbar-text: #f8fafc;
+  --keycap-background: #334155;
+  --keycap-text: #f8fafc;
+}

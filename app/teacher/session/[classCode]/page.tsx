@@ -12,9 +12,21 @@ import {
   Eye,
   AlertTriangle,
 } from "lucide-react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  writeBatch,
+  getDocs,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
 import StudentStatsCard from "@/components/live/StudentStatsCard";
+import { getAssignment } from "@/services/assignmentService";
 import dynamic from "next/dynamic";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 
@@ -42,6 +54,113 @@ export default function LiveSessionPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const draft = useAssignmentEditorStore((state) => state.draft);
+  const [totalQuestions, setTotalQuestions] = useState<number>(0);
+  const [sessionStatus, setSessionStatus] = useState<
+    "active" | "paused" | "closed" | "stopped"
+  >("active");
+
+  const togglePause = async () => {
+    const newStatus = sessionStatus === "paused" ? "active" : "paused";
+    try {
+      await updateDoc(doc(db, "sessions", params.classCode), {
+        status: newStatus,
+      });
+    } catch (err) {
+      console.error("Error toggling pause:", err);
+    }
+  };
+
+  const closeSessionAndForceSubmit = async () => {
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn kết thúc? Hệ thống sẽ tự động thu bài của tất cả học sinh đang làm."
+      )
+    )
+      return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Mark session as closed
+      batch.update(doc(db, "sessions", params.classCode), {
+        status: "closed",
+      });
+
+      // 2. Find all students currently in progress for this session
+      const submissionsRef = collection(db, "student_submissions");
+      const q = query(
+        submissionsRef,
+        where("sessionId", "==", params.classCode)
+      );
+      const snapshot = await getDocs(q);
+
+      // 3. Force submit their work
+      snapshot.forEach((submissionDoc) => {
+        const data = submissionDoc.data();
+        if (data.status !== "submitted" && data.status !== "Đã nộp") {
+          batch.update(submissionDoc.ref, {
+            status: "submitted",
+            submittedAt: serverTimestamp(),
+          });
+        }
+      });
+
+      await batch.commit();
+      alert("Đã thu bài toàn bộ học sinh!");
+    } catch (error) {
+      console.error("Lỗi khi đóng phòng thi:", error);
+    }
+  };
+
+  useEffect(() => {
+    // Phase 1: Secure Session Creation (Teacher Side)
+    const ensureSessionExists = async () => {
+      const user = auth.currentUser;
+      if (!user?.uid) return;
+      try {
+        await setDoc(
+          doc(db, "sessions", params.classCode),
+          {
+            classCode: params.classCode,
+            teacherId: user.uid,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (e) {
+        console.error("Error ensuring secure session doc:", e);
+      }
+    };
+    ensureSessionExists();
+
+    const unsubSession = onSnapshot(
+      doc(db, "sessions", params.classCode),
+      (snapshot) => {
+        if (snapshot.exists() && snapshot.data()?.status) {
+          setSessionStatus(snapshot.data().status);
+        }
+      }
+    );
+    return () => unsubSession();
+  }, [params.classCode]);
+
+  useEffect(() => {
+    const fetchAssignmentTotal = async () => {
+      try {
+        const assignment = await getAssignment(params.classCode);
+        if (assignment?.sections) {
+          const count = assignment.sections.reduce(
+            (acc: number, sec: any) => acc + (sec.items?.length || 0),
+            0
+          );
+          setTotalQuestions(count);
+        }
+      } catch (err) {
+        console.error("Error fetching assignment totalQuestions:", err);
+      }
+    };
+    fetchAssignmentTotal();
+  }, [params.classCode]);
 
   useEffect(() => {
     setLoading(true);
@@ -80,6 +199,8 @@ export default function LiveSessionPage({ params }: PageProps) {
     return () => unsubscribe();
   }, [params.classCode]);
 
+  const session = { status: sessionStatus };
+
   return (
     <div className="min-h-screen bg-slate-950 p-6 md:p-8 text-slate-100 relative">
       {/* Top Header */}
@@ -103,13 +224,87 @@ export default function LiveSessionPage({ params }: PageProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2">
-            <Activity className="h-4 w-4 text-emerald-400 animate-pulse" />
-            <span className="text-xs font-semibold text-emerald-300">
-              Real-time Firebase Sync
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Status Indicator */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
+            <span className={`relative flex h-3 w-3`}>
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  session.status === "active" ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+              ></span>
+              <span
+                className={`relative inline-flex rounded-full h-3 w-3 ${
+                  session.status === "active" ? "bg-emerald-500" : "bg-amber-500"
+                }`}
+              ></span>
+            </span>
+            <span className="text-sm font-medium text-slate-300">
+              {session.status === "active" ? "Đang diễn ra" : "Đang tạm dừng"}
             </span>
           </div>
+
+          <div className="h-6 w-px bg-slate-800 mx-1"></div> {/* Divider */}
+
+          {/* Pause / Play Button */}
+          {session.status === "active" ? (
+            <button
+              onClick={togglePause}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-lg hover:bg-amber-500/20 transition-colors shadow-sm"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+              Tạm dừng
+            </button>
+          ) : (
+            <button
+              onClick={togglePause}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition-colors shadow-sm"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <path d="M5 3l14 9-14 9V3z" />
+              </svg>
+              Tiếp tục
+            </button>
+          )}
+
+          {/* Close Button */}
+          <button
+            onClick={closeSessionAndForceSubmit}
+            disabled={session.status === "closed" || session.status === "stopped"}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg hover:bg-rose-500/20 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+            </svg>
+            Thu bài ngay
+          </button>
+
           <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2">
             <Users className="h-4 w-4 text-indigo-400" />
             <span className="text-xs font-semibold text-slate-300">
@@ -144,27 +339,39 @@ export default function LiveSessionPage({ params }: PageProps) {
       ) : (
         /* Phase 2: High-Performance StudentStatsCard Grid */
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {students.map((student) => (
-            <div
-              key={student.id}
-              onClick={() => setSelectedStudent(student)}
-              className="transition-transform hover:-translate-y-1 active:scale-[0.98]"
-            >
-              <StudentStatsCard
-                studentId={student.id}
-                studentName={
-                  student.name ||
-                  student.studentName ||
-                  student.fullName ||
-                  "HS #" + student.id.slice(0, 4)
-                }
-                status={student.status || "Online"}
-                progress={student.progress || "0%"}
-                score={student.score || "Đang làm"}
-                warnings={student.warnings || 0}
-              />
-            </div>
-          ))}
+          {students.map((student) => {
+            const answeredCount = Object.keys(student?.answers || {}).length;
+            const progressPercent =
+              totalQuestions > 0
+                ? Math.round((answeredCount / totalQuestions) * 100)
+                : parseInt((student?.progress || "0%").replace("%", ""), 10) ||
+                  0;
+
+            return (
+              <div
+                key={student.id}
+                onClick={() => setSelectedStudent(student)}
+                className="transition-transform hover:-translate-y-1 active:scale-[0.98]"
+              >
+                <StudentStatsCard
+                  studentId={student.id}
+                  studentName={
+                    student.name ||
+                    student.studentName ||
+                    student.fullName ||
+                    "HS #" + student.id.slice(0, 4)
+                  }
+                  status={student.status || "Online"}
+                  progress={`${progressPercent}%`}
+                  score={student.score || "Đang làm"}
+                  warnings={student.warnings || 0}
+                  answeredCount={answeredCount}
+                  totalQuestions={totalQuestions}
+                  answers={student?.answers}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
 

@@ -476,3 +476,28 @@ export interface Assignment {
   updatedAt?: any;
   createdAt?: any;
 }
+
+export interface Annotation {
+  id: string;
+  type: "line" | "text";
+  tool: string; // 'pen' | 'highlighter' | 'eraser' | 'line' | 'text'
+  points?: number[];
+  color: string;
+  strokeWidth?: number;
+  pageNumber?: number;
+  x?: number;
+  y?: number;
+  text?: string;
+  fontSize?: number;
+}
+
+export type SessionStatus = "active" | "paused" | "closed" | "stopped";
+
+export interface ClassSession {
+  id: string;
+  classCode: string;
+  status: SessionStatus;
+  createdAt?: any;
+  updatedAt?: any;
+}
+

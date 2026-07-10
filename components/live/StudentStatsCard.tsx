@@ -11,6 +11,9 @@ export interface StudentStatsCardProps {
   score?: string;
   warnings?: number;
   lastActive?: string;
+  answeredCount?: number;
+  totalQuestions?: number;
+  answers?: Record<string, any>;
 }
 
 function StudentStatsCard({
@@ -20,12 +23,26 @@ function StudentStatsCard({
   progress = "0%",
   score = "Đang làm",
   warnings = 0,
+  answeredCount,
+  totalQuestions,
+  answers,
 }: StudentStatsCardProps) {
-  const isOnline = status === "Online" || status === "Active" || status === "Đang làm bài";
-  const isDone = status === "Done" || status === "submitted" || status === "Đã nộp";
+  const isOnline =
+    status === "Online" || status === "Active" || status === "Đang làm bài";
+  const isDone =
+    status === "Done" || status === "submitted" || status === "Đã nộp";
 
-  // Parse progress numeric percentage for sleek width bar
-  const pctNum = parseInt((progress || "0%").replace("%", ""), 10) || 0;
+  const count =
+    answeredCount !== undefined
+      ? answeredCount
+      : answers
+      ? Object.keys(answers).length
+      : 0;
+
+  const progressPercent =
+    totalQuestions && totalQuestions > 0
+      ? Math.round((count / totalQuestions) * 100)
+      : parseInt((progress || "0%").replace("%", ""), 10) || 0;
 
   return (
     <div className="group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-xl hover:border-indigo-500/80 hover:bg-slate-900 transition-all cursor-pointer">
@@ -82,20 +99,30 @@ function StudentStatsCard({
       {/* Middle: Progress Bar & Score Stats */}
       <div className="space-y-3 mt-2">
         <div>
-          <div className="flex justify-between text-xs font-semibold mb-1.5">
+          <div className="flex justify-between items-center mb-1 text-xs font-semibold">
             <span className="text-slate-400">Tiến độ hoàn thành:</span>
-            <span className="text-white">{progress}</span>
+            <span className="text-white font-bold">
+              {progressPercent}%
+              {totalQuestions && totalQuestions > 0
+                ? ` (${count}/${totalQuestions})`
+                : ""}
+            </span>
           </div>
-          <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+          <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
+              className={`h-2 rounded-full transition-all duration-500 ease-out ${
                 isDone
                   ? "bg-emerald-500"
-                  : pctNum > 0
+                  : progressPercent > 0
                   ? "bg-indigo-500"
                   : "bg-slate-700"
               }`}
-              style={{ width: `${Math.max(4, pctNum)}%` }}
+              style={{
+                width: `${Math.max(
+                  progressPercent > 0 ? 4 : 0,
+                  progressPercent
+                )}%`,
+              }}
             />
           </div>
         </div>

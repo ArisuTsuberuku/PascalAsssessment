@@ -18,6 +18,7 @@ import { GripVertical, GripHorizontal, Plus, Check, Wand2 } from "lucide-react";
 import MathLiveInput from "./MathLiveInput";
 import MatchingQuestionRenderer from "./MatchingQuestionRenderer";
 import TextareaAutosize from "react-textarea-autosize";
+import { MathInput } from "@/components/ui/MathInput";
 
 export const FROSTED_GLASS_CLASS =
   "bg-white/80 backdrop-blur-md border border-indigo-300 rounded-md text-indigo-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 p-2 min-h-[40px] w-full h-full flex items-center";
@@ -602,7 +603,7 @@ export default function CanvasItemRenderer({
                 </div>
               )}
               <div className="flex-1 min-w-0 flex items-center px-2 py-1">
-                <MathLiveInput
+                <MathInput
                   value={
                     isPreviewMode ? studentState.text || "" : correctMathjs
                   }
@@ -623,7 +624,6 @@ export default function CanvasItemRenderer({
                       ? "Nhập công thức/đáp án..."
                       : "Nhập biểu thức MathLive..."
                   }
-                  className="w-full h-full bg-transparent border-none focus:outline-none focus:ring-0 text-xs font-semibold"
                 />
               </div>
             </div>

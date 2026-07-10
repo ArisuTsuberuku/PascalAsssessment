@@ -107,14 +107,21 @@ export default function AssignmentEditorPage({ params }: PageProps) {
     setSaveSuccess(false);
 
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+
+      if (!user?.uid) {
+        alert("Vui lòng đăng nhập để lưu bài tập!");
         setSaveError("Vui lòng đăng nhập lại để lưu bài.");
         setSaving(false);
         return;
       }
 
-      const isNew = params.assignmentId === "new" || params.assignmentId === "new-assignment";
+      // Force refresh token to bypass ghost token issues
+      await user.getIdToken(true);
+
+      const isNew =
+        params.assignmentId === "new" || params.assignmentId === "new-assignment";
       const finalId = isNew ? generateId() : params.assignmentId;
       let finalPdfUrl = draft?.pdfUrl || "";
 
@@ -125,17 +132,23 @@ export default function AssignmentEditorPage({ params }: PageProps) {
         finalPdfUrl = await getDownloadURL(storageRef);
       }
 
-      // 2. Prepare final draft object securely injecting teacherId and updatedAt
-      const finalDraft = {
+      // 2. Prepare final draft object securely injecting teacherId and updatedAt at root level
+      const finalDraft: Record<string, any> = {
         ...draft,
         assignmentId: finalId,
         pdfUrl: finalPdfUrl,
-        teacherId: currentUser.uid,
+        teacherId: user.uid, // REQUIRED BY SECURITY RULES
         updatedAt: serverTimestamp(),
       };
 
+      if (isNew) {
+        finalDraft.createdAt = serverTimestamp();
+      }
+
       // 3. Save to Firestore
-      await setDoc(doc(db, "assignments", finalId), finalDraft);
+      await setDoc(doc(db, "assignments", finalId), finalDraft, {
+        merge: true,
+      });
 
       // 4. Invalidate Next.js cache so dashboard reflects updated assignments
       try {
@@ -155,12 +168,15 @@ export default function AssignmentEditorPage({ params }: PageProps) {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3500);
 
+      alert("Lưu bài tập thành công!");
+
       if (isNew) {
         router.replace(`/teacher/assignment/${finalId}`);
       }
     } catch (err: any) {
-      console.error("Save failed:", err);
+      console.error("Lỗi khi lưu bài tập:", err);
       setSaveError("Lỗi khi lưu bài tập: " + err?.message);
+      alert(`Lỗi khi lưu: ${err?.message || "Không thể lưu bài tập"}`);
     } finally {
       setSaving(false);
     }

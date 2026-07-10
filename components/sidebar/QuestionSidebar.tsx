@@ -3,7 +3,7 @@
 import React from "react";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { SidebarItem, ItemType } from "@/types/assignment";
-import MathLiveInput from "@/components/canvas/MathLiveInput";
+import { MathInput } from "@/components/ui/MathInput";
 import {
   ListOrdered,
   TextCursorInput,
@@ -294,27 +294,24 @@ export default function QuestionSidebar() {
                     {isPreviewMode ? "Trả lời công thức:" : "Công thức (MathJS):"}
                   </span>
                   {!isPreviewMode ? (
-                    <input
-                      type="text"
-                      value={item.config.correctMathjs}
-                      onChange={(e) => {
+                    <MathInput
+                      value={item.config.correctMathjs || ""}
+                      onChange={(latex) => {
                         if (item.type !== "math-input") return;
                         updateItem(item.id, {
                           config: {
                             ...item.config,
-                            correctMathjs: e.target.value,
+                            correctMathjs: latex,
                           },
                         });
                       }}
-                      placeholder="ví dụ: 2*x + 1"
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:border-purple-500 focus:outline-none"
+                      placeholder="Nhập đáp án công thức LaTeX..."
                     />
                   ) : (
-                    <MathLiveInput
+                    <MathInput
                       value={studentAnswers[item.id] || ""}
-                      onChange={(val) => setStudentAnswer(item.id, val)}
+                      onChange={(latex) => setStudentAnswer(item.id, latex)}
                       placeholder="Nhập câu trả lời toán học..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
                     />
                   )}
                 </div>
