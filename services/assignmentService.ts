@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Assignment } from "@/types/assignment";
 import { mockAssignment } from "@/constants/mockAssignment";
@@ -22,6 +22,27 @@ export async function getAssignment(
   } catch (error) {
     console.error("Error fetching assignment from Firestore:", error);
     throw error;
+  }
+}
+
+/**
+ * Fetch all assignment documents from Firestore.
+ */
+export async function getAllAssignments(): Promise<Assignment[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
+    const assignments: Assignment[] = [];
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      assignments.push({
+        ...data,
+        assignmentId: data.assignmentId || docSnap.id,
+      } as Assignment);
+    });
+    return assignments;
+  } catch (error) {
+    console.error("Error fetching all assignments from Firestore:", error);
+    return [];
   }
 }
 

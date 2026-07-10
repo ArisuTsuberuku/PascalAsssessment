@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -11,37 +14,10 @@ import {
   LogOut,
   Sparkles,
 } from "lucide-react";
+import { getAllAssignments } from "@/services/assignmentService";
 
-export default function TeacherDashboardPage() {
-  const mockAssignments = [
-    {
-      id: "calc-ab-ch3",
-      title: "AP Calculus AB — Chapter 3 Differentiation",
-      classCode: "CALC88",
-      questions: 10,
-      submissions: 24,
-      status: "Active",
-      date: "2026-07-09",
-    },
-    {
-      id: "phys-mech-01",
-      title: "Physics Mechanics — Dynamics & Forces Sheet",
-      classCode: "PHYS42",
-      questions: 8,
-      submissions: 18,
-      status: "Active",
-      date: "2026-07-08",
-    },
-    {
-      id: "alg-lin-eval",
-      title: "Linear Algebra & Matrices Review PDF",
-      classCode: "MATH89",
-      questions: 15,
-      submissions: 31,
-      status: "Archived",
-      date: "2026-07-05",
-    },
-  ];
+export default async function TeacherDashboardPage() {
+  const assignments = await getAllAssignments();
 
   return (
     <div className="flex min-h-screen bg-slate-950">
@@ -150,54 +126,73 @@ export default function TeacherDashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-sm">
-              {mockAssignments.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4 font-medium text-white">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <span>{item.title}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="font-mono font-bold tracking-wider rounded bg-slate-800 px-2 py-1 text-indigo-300">
-                      {item.classCode}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-300">{item.questions} câu</td>
-                  <td className="px-6 py-4 text-slate-300">{item.submissions} học sinh</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        item.status === "Active"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-slate-800 text-slate-400"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/teacher/assignment/${item.id}`}
-                        className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors inline-flex items-center gap-1.5"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        <span>Chỉnh sửa 80/20</span>
-                      </Link>
-                      <Link
-                        href={`/teacher/session/${item.classCode}`}
-                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors inline-flex items-center gap-1.5"
-                      >
-                        <Play className="h-3.5 w-3.5" />
-                        <span>Live Session</span>
-                      </Link>
-                    </div>
+              {assignments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                    Chưa có bài kiểm tra nào trong cơ sở dữ liệu. Nhấn &quot;Tạo bài tập PDF mới&quot; để bắt đầu.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                assignments.map((assignment) => {
+                  const totalQuestions =
+                    assignment.sections?.reduce(
+                      (acc, sec) => acc + (sec.items?.length || 0),
+                      0
+                    ) || 0;
+                  const classCode =
+                    (assignment as any).classCode ||
+                    assignment.assignmentId?.slice(0, 6).toUpperCase() ||
+                    "PAS888";
+
+                  return (
+                    <tr
+                      key={assignment.assignmentId}
+                      className="hover:bg-slate-800/30 transition-colors"
+                    >
+                      <td className="px-6 py-4 font-medium text-white">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <span>{assignment.title || "Bài kiểm tra chưa đặt tên"}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-mono font-bold tracking-wider rounded bg-slate-800 px-2 py-1 text-indigo-300">
+                          {classCode}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-300">
+                        {totalQuestions} câu
+                      </td>
+                      <td className="px-6 py-4 text-slate-300">0 học sinh</td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Active
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/teacher/assignment/${assignment.assignmentId}`}
+                            className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors inline-flex items-center gap-1.5"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span>Chỉnh sửa 80/20</span>
+                          </Link>
+                          <Link
+                            href={`/teacher/session/${classCode}`}
+                            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors inline-flex items-center gap-1.5"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                            <span>Live Session</span>
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

@@ -3,6 +3,7 @@
 import React from "react";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { SidebarItem, ItemType } from "@/types/assignment";
+import MathLiveInput from "@/components/canvas/MathLiveInput";
 import {
   ListOrdered,
   TextCursorInput,
@@ -17,11 +18,34 @@ import {
   FormInput,
   PenTool,
   CheckCircle2,
+  Copy,
+  Pin,
+  PlusSquare,
 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 
 export default function QuestionSidebar() {
-  const { draft, addSidebarItem, updateItem, deleteItem, isPreviewMode } =
-    useAssignmentEditorStore();
+  const {
+    draft,
+    addSidebarItem,
+    updateItem,
+    deleteItem,
+    duplicateSidebarItem,
+    isPreviewMode,
+  } = useAssignmentEditorStore(
+    useShallow((s) => ({
+      draft: s.draft,
+      addSidebarItem: s.addSidebarItem,
+      updateItem: s.updateItem,
+      deleteItem: s.deleteItem,
+      duplicateSidebarItem: s.duplicateSidebarItem,
+      isPreviewMode: s.isPreviewMode,
+    }))
+  );
+
+  const [studentAnswers, setStudentAnswers] = React.useState<
+    Record<string, string>
+  >({});
 
   if (!draft) return null;
 
@@ -73,51 +97,80 @@ export default function QuestionSidebar() {
               className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-lg hover:border-slate-700 transition-all flex flex-col gap-3"
             >
               {/* Card Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="rounded bg-purple-600 px-2 py-0.5 text-[11px] font-bold text-white">
-                    #{index + 1}
-                  </span>
-                  <input
-                    type="text"
-                    value={item.name}
-                    readOnly={isPreviewMode}
-                    onChange={(e) =>
-                      updateItem(item.id, { name: e.target.value })
-                    }
-                    className="bg-transparent text-xs font-bold text-white border-b border-transparent hover:border-slate-700 focus:border-purple-500 focus:outline-none px-1"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded px-2 py-0.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      readOnly={isPreviewMode}
-                      value={item.points}
-                      onChange={(e) =>
-                        updateItem(item.id, {
-                          points: Number(e.target.value) || 0,
-                        })
-                      }
-                      className="w-8 bg-transparent text-right text-xs font-mono font-semibold text-purple-300 focus:outline-none"
-                    />
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      đ
+              <div className="flex flex-col gap-2 mb-3">
+                <div className="flex flex-row items-center w-full gap-2">
+                  {/* Left Side: Badge & Title (Takes remaining space, truncates if too long) */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">
+                      #{index + 1}
                     </span>
+                    <input
+                      type="text"
+                      value={item.name}
+                      readOnly={isPreviewMode}
+                      onChange={(e) =>
+                        updateItem(item.id, { name: e.target.value })
+                      }
+                      className="bg-transparent font-semibold text-white text-sm border-b border-transparent hover:border-slate-700 focus:border-purple-500 focus:outline-none px-1 truncate w-full"
+                    />
                   </div>
 
-                  {!isPreviewMode && (
-                    <button
-                      onClick={() => deleteItem(item.id)}
-                      title="Xóa câu hỏi này"
-                      className="p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+                  {/* Right Side: Actions & Points (Never shrinks) */}
+                  <div className="flex items-center gap-1 shrink-0 text-slate-400">
+                    {!isPreviewMode && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => duplicateSidebarItem(item.id)}
+                          title="Nhân bản câu hỏi"
+                          className="p-1 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                        >
+                          <Copy size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Ghim / Đánh dấu"
+                          className="p-1 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                        >
+                          <Pin size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addSidebarItem(item.type)}
+                          title="Tạo phần / Thêm câu hỏi cùng dạng"
+                          className="p-1 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                        >
+                          <PlusSquare size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteItem(item.id)}
+                          title="Xóa câu hỏi này"
+                          className="p-1 hover:text-rose-400 hover:bg-slate-700 rounded transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Points input: Moved to the end, made much smaller */}
+                    <div className="flex items-center bg-slate-800 rounded px-1 border border-slate-700 ml-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        readOnly={isPreviewMode}
+                        value={item.points}
+                        onChange={(e) =>
+                          updateItem(item.id, {
+                            points: Number(e.target.value) || 0,
+                          })
+                        }
+                        className="w-8 h-5 bg-transparent text-[10px] text-white text-center focus:outline-none font-mono"
+                      />
+                      <span className="text-[10px] ml-0.5 font-mono">đ</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -150,21 +203,49 @@ export default function QuestionSidebar() {
                       className="flex items-center gap-2 text-xs"
                     >
                       <input
-                        type="radio"
-                        name={`correct-${item.id}`}
+                        type="checkbox"
                         checked={
                           isPreviewMode
-                            ? false
-                            : item.config.correctHash === opt.id
+                            ? (studentAnswers[item.id]?.split(",") || []).includes(
+                                opt.id
+                              )
+                            : (
+                                item.config.correctHashes || [
+                                  item.config.correctHash,
+                                ]
+                              ).includes(opt.id)
                         }
-                        disabled={isPreviewMode}
-                        onChange={() =>
-                          !isPreviewMode &&
-                          updateItem(item.id, {
-                            config: { ...item.config, correctHash: opt.id },
-                          })
-                        }
-                        className="text-purple-600 focus:ring-purple-500"
+                        onChange={() => {
+                          if (isPreviewMode) {
+                            const current = studentAnswers[item.id]
+                              ? studentAnswers[item.id].split(",")
+                              : [];
+                            const next = current.includes(opt.id)
+                              ? current.filter((id) => id !== opt.id)
+                              : [...current, opt.id];
+                            setStudentAnswers((prev) => ({
+                              ...prev,
+                              [item.id]: next.join(","),
+                            }));
+                          } else {
+                            const current: string[] =
+                              item.config.correctHashes ||
+                              (item.config.correctHash
+                                ? [item.config.correctHash]
+                                : []);
+                            const next = current.includes(opt.id)
+                              ? current.filter((id) => id !== opt.id)
+                              : [...current, opt.id];
+                            updateItem(item.id, {
+                              config: {
+                                ...item.config,
+                                correctHash: next[0] || "",
+                                correctHashes: next,
+                              },
+                            });
+                          }
+                        }}
+                        className="rounded text-purple-600 focus:ring-purple-500 bg-slate-900 border-slate-700"
                       />
                       <input
                         type="text"
@@ -214,10 +295,16 @@ export default function QuestionSidebar() {
                       className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:border-purple-500 focus:outline-none"
                     />
                   ) : (
-                    <input
-                      type="text"
+                    <MathLiveInput
+                      value={studentAnswers[item.id] || ""}
+                      onChange={(val) =>
+                        setStudentAnswers((prev) => ({
+                          ...prev,
+                          [item.id]: val,
+                        }))
+                      }
                       placeholder="Nhập câu trả lời toán học..."
-                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-slate-200 focus:border-purple-500 focus:outline-none"
+                      className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
                     />
                   )}
                 </div>
@@ -254,6 +341,13 @@ export default function QuestionSidebar() {
                   ) : (
                     <input
                       type="text"
+                      value={studentAnswers[item.id] || ""}
+                      onChange={(e) =>
+                        setStudentAnswers((prev) => ({
+                          ...prev,
+                          [item.id]: e.target.value,
+                        }))
+                      }
                       placeholder="Nhập câu trả lời..."
                       className="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 focus:border-purple-500 focus:outline-none"
                     />

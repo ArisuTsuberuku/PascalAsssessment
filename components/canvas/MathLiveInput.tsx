@@ -38,11 +38,11 @@ export default function MathLiveInput({
       if (typeof window !== "undefined") {
         if ((window as any).mathVirtualKeyboard) {
           (window as any).mathVirtualKeyboard.fontsDirectory =
-            "https://unpkg.com/mathlive/dist/fonts";
+            "https://cdn.jsdelivr.net/npm/mathlive@0.110.0/dist/fonts";
         }
         if (ml && (ml as any).MathfieldElement) {
           (ml as any).MathfieldElement.fontsDirectory =
-            "https://unpkg.com/mathlive/dist/fonts";
+            "https://cdn.jsdelivr.net/npm/mathlive@0.110.0/dist/fonts";
         }
       }
     });

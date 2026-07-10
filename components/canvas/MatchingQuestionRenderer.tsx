@@ -152,11 +152,16 @@ export default function MatchingQuestionRenderer({
 
   // ─── Container ref for coordinate system ───
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
   const { dotPositions, setDotRef, measure } = useDotPositions(containerRef);
 
-  // Re-measure after drag/resize operations settle
+  // Re-measure throttled to 1 frame max during rapid drag/resize operations
   const triggerRemeasure = useCallback(() => {
-    requestAnimationFrame(() => measure());
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      measure();
+      rafRef.current = null;
+    });
   }, [measure]);
 
   const handleDotClick = (nodeId: string) => {

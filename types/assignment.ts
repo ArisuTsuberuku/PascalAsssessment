@@ -19,6 +19,7 @@ export interface MultipleChoiceOption {
 export interface MultipleChoiceConfig {
   options: MultipleChoiceOption[];
   correctHash: string;
+  correctHashes?: string[];
   points?: number;
   position?: { x: number; y: number };
   size?: { width: number | string; height: number | string };

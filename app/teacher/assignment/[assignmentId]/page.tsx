@@ -117,7 +117,19 @@ export default function AssignmentEditorPage({ params }: PageProps) {
       // 3. Save to Firestore
       await setDoc(doc(db, "assignments", finalId), finalDraft);
 
-      // 4. Cleanup & Route
+      // 4. Invalidate Next.js cache so dashboard reflects updated assignments
+      try {
+        await fetch("/api/assignments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignmentId: finalId }),
+        });
+      } catch (e) {
+        console.warn("Cache revalidation note:", e);
+      }
+      router.refresh();
+
+      // 5. Cleanup & Route
       useAssignmentEditorStore.getState().clearPendingPdf();
       loadDraft(finalDraft);
       setSaveSuccess(true);

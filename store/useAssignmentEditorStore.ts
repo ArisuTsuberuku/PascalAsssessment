@@ -31,6 +31,7 @@ interface AssignmentEditorState {
   activePdfPage: number;
   setActivePdfPage: (page: number) => void;
   duplicateCanvasItem: (itemId: string) => void;
+  duplicateSidebarItem: (itemId: string) => void;
 
   // Item Management Actions
   addSidebarItem: (type: ItemType) => void;
@@ -745,6 +746,52 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>(
             y: ((clonedItem.config as any).position.y || 0) + 20,
           };
         }
+
+        const updatedSections = state.draft.sections.map((sec) => {
+          if (sec.items.some((item) => item.id === itemId)) {
+            return {
+              ...sec,
+              items: [...sec.items, clonedItem],
+            };
+          }
+          return sec;
+        });
+
+        return {
+          draft: {
+            ...state.draft,
+            sections: updatedSections,
+          },
+        };
+      });
+    },
+
+    duplicateSidebarItem: (itemId: string) => {
+      set((state) => {
+        if (!state.draft) return state;
+
+        let targetItem: SidebarItem | null = null;
+        for (const sec of state.draft.sections) {
+          const found = sec.items.find((item) => item.id === itemId);
+          if (found) {
+            targetItem = found as SidebarItem;
+            break;
+          }
+        }
+        if (!targetItem) return state;
+
+        const oldName = targetItem.name || "";
+        const match = oldName.match(/(.*?)(\d+)$/);
+        let newName = oldName + " (bản sao)";
+        if (match) {
+          newName = `${match[1]}${parseInt(match[2], 10) + 1}`;
+        }
+
+        const clonedItem: SidebarItem = JSON.parse(JSON.stringify(targetItem));
+        clonedItem.id = `item-sidebar-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 6)}`;
+        clonedItem.name = newName;
 
         const updatedSections = state.draft.sections.map((sec) => {
           if (sec.items.some((item) => item.id === itemId)) {
