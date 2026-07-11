@@ -1,8 +1,28 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Helper functions
+    function isAuth() { return request.auth != null; }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+    function isPdf() { return request.resource.contentType == 'application/pdf'; }
+    function isUnder5MB() { return request.resource.size < 5 * 1024 * 1024; }
+    function isUnder20MB() { return request.resource.size < 20 * 1024 * 1024; }
+
+    // 1. Quản lý thư mục PDF (Chỉ cho phép file PDF < 20MB)
+    match /pdfs/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isPdf() && isUnder20MB();
+    }
+
+    // 2. Quản lý thư mục bài làm học sinh (Chỉ cho phép ảnh < 5MB)
+    match /student_uploads/{sessionId}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && isImage() && isUnder5MB();
+    }
+
+    // Chặn mọi quyền truy cập vào các thư mục khác
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
