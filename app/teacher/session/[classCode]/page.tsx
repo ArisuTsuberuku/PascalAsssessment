@@ -11,6 +11,8 @@ import {
   X,
   Eye,
   AlertTriangle,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 import {
   collection,
@@ -26,9 +28,12 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import StudentStatsCard from "@/components/live/StudentStatsCard";
+import QuestionGridOverview from "@/components/live/QuestionGridOverview";
+import StudentFocusView from "@/components/live/StudentFocusView";
 import { getAssignment } from "@/services/assignmentService";
 import dynamic from "next/dynamic";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
+import type { Item, Assignment } from "@/types/assignment";
 
 const PdfCanvasWrapper = dynamic(
   () => import("@/components/canvas/PdfCanvasWrapper"),
@@ -55,6 +60,9 @@ export default function LiveSessionPage({ params }: PageProps) {
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const draft = useAssignmentEditorStore((state) => state.draft);
   const [totalQuestions, setTotalQuestions] = useState<number>(0);
+  const [assignmentItems, setAssignmentItems] = useState<Item[]>([]);
+  const [assignmentData, setAssignmentData] = useState<Assignment | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "grid">("grid");
   const [sessionStatus, setSessionStatus] = useState<
     "active" | "paused" | "closed" | "stopped"
   >("active");
@@ -148,12 +156,15 @@ export default function LiveSessionPage({ params }: PageProps) {
     const fetchAssignmentTotal = async () => {
       try {
         const assignment = await getAssignment(params.classCode);
-        if (assignment?.sections) {
-          const count = assignment.sections.reduce(
-            (acc: number, sec: any) => acc + (sec.items?.length || 0),
-            0
-          );
-          setTotalQuestions(count);
+        if (assignment) {
+          setAssignmentData(assignment as Assignment);
+          if (assignment.sections) {
+            const items = assignment.sections.flatMap(
+              (sec: any) => sec.items || []
+            );
+            setAssignmentItems(items);
+            setTotalQuestions(items.length);
+          }
         }
       } catch (err) {
         console.error("Error fetching assignment totalQuestions:", err);
@@ -311,6 +322,32 @@ export default function LiveSessionPage({ params }: PageProps) {
               {students.length} học sinh
             </span>
           </div>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center rounded-lg border border-slate-800 bg-slate-900 overflow-hidden">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+                viewMode === "grid"
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Lưới
+            </button>
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+                viewMode === "cards"
+                  ? "bg-indigo-600 text-white"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+              }`}
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              Thẻ
+            </button>
+          </div>
         </div>
       </div>
 
@@ -337,8 +374,15 @@ export default function LiveSessionPage({ params }: PageProps) {
           </p>
         </div>
       ) : (
-        /* Phase 2: High-Performance StudentStatsCard Grid */
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        /* Phase 2: View Mode Switch */
+        viewMode === "grid" ? (
+          <QuestionGridOverview
+            students={students}
+            assignmentItems={assignmentItems}
+            onSelectStudent={(s) => setSelectedStudent(s)}
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {students.map((student) => {
             const answeredCount = Object.keys(student?.answers || {}).length;
             const progressPercent =
@@ -373,59 +417,17 @@ export default function LiveSessionPage({ params }: PageProps) {
             );
           })}
         </div>
+        )
       )}
 
-      {/* Phase 3: The Livestream Fullscreen Modal Overlay */}
+      {/* Phase 3: StudentFocusView (Classkick-style) */}
       {selectedStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col overflow-hidden animate-fade-in">
-          {/* Livestream 1-on-1 Header Bar */}
-          <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-6 py-3.5 shadow-lg shrink-0">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-300 border border-indigo-500/30">
-                <Eye className="h-3.5 w-3.5" />
-                LIVESTREAM 1-ON-1
-              </span>
-              <h2 className="text-base font-bold text-white">
-                Bài làm trực tiếp của:{" "}
-                <span className="text-purple-400">
-                  {selectedStudent.name ||
-                    selectedStudent.studentName ||
-                    selectedStudent.fullName ||
-                    selectedStudent.id}
-                </span>
-              </h2>
-              <span className="text-xs text-slate-400">
-                (Tiến độ: <strong className="text-white">{selectedStudent.progress || "0%"}</strong> | Điểm:{" "}
-                <strong className="text-indigo-300">{selectedStudent.score || "Đang tính"}</strong>)
-              </span>
-              {selectedStudent.warnings > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-300 border border-amber-500/30">
-                  <AlertTriangle className="h-3 w-3" />
-                  Rời tab {selectedStudent.warnings} lần
-                </span>
-              )}
-            </div>
-
-            <button
-              onClick={() => setSelectedStudent(null)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-rose-600 hover:border-rose-500 hover:text-white transition-all shadow"
-            >
-              <X className="h-4 w-4" />
-              <span>Đóng Livestream</span>
-            </button>
-          </div>
-
-          {/* Full-Fidelity Real-time Synced Document & Strokes Viewer */}
-          <div className="flex-1 relative w-full h-full overflow-hidden bg-slate-800">
-            <PdfCanvasWrapper
-              fileUrl={draft?.pdfUrl}
-              initialData={draft}
-              liveStudentData={selectedStudent}
-              isPreviewMode={true}
-              isLiveMonitor={true}
-            />
-          </div>
-        </div>
+        <StudentFocusView
+          student={selectedStudent}
+          assignment={assignmentData}
+          assignmentItems={assignmentItems}
+          onClose={() => setSelectedStudent(null)}
+        />
       )}
     </div>
   );

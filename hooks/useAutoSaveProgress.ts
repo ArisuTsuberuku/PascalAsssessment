@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { doc, updateDoc, serverTimestamp, Firestore } from "firebase/firestore";
 import { db as defaultDb } from "@/lib/firebase";
+import type { ScoreResult } from "@/lib/calculateScore";
 
 export interface UseAutoSaveProgressOptions {
   answers: Record<string, any>;
@@ -10,6 +11,7 @@ export interface UseAutoSaveProgressOptions {
   totalQuestions?: number;
   submissionId: string | null | undefined;
   db?: Firestore;
+  gradedResult?: ScoreResult | null;
 }
 
 /**
@@ -37,12 +39,14 @@ export function useAutoSaveProgress(
     totalQuestions = 0,
     submissionId,
     db = defaultDb,
+    gradedResult,
   } = options;
 
   // 1. Bulletproof against stale closures by keeping latest state in refs
   const latestAnswers = useRef(answers);
   const latestAnnotations = useRef(annotations);
   const latestTotalQuestions = useRef(totalQuestions);
+  const latestGradedResult = useRef(gradedResult);
 
   useEffect(() => {
     latestAnswers.current = answers;
@@ -55,6 +59,10 @@ export function useAutoSaveProgress(
   useEffect(() => {
     latestTotalQuestions.current = totalQuestions;
   }, [totalQuestions]);
+
+  useEffect(() => {
+    latestGradedResult.current = gradedResult;
+  }, [gradedResult]);
 
   useEffect(() => {
     // 2. Guard clause: Don't run if no submission doc exists yet
@@ -106,6 +114,14 @@ export function useAutoSaveProgress(
           updatePayload.annotations = currentAnnotations;
         }
 
+        // Include grading results if available
+        const currentGraded = latestGradedResult.current;
+        if (currentGraded) {
+          updatePayload.score = `${currentGraded.totalScore}/${currentGraded.maxScore}`;
+          updatePayload.percentage = currentGraded.percentage;
+          updatePayload.gradedAnswers = currentGraded.gradedAnswers;
+        }
+
         // 4. Push to Firestore
         await updateDoc(
           doc(db, "student_submissions", submissionId),
@@ -120,5 +136,5 @@ export function useAutoSaveProgress(
 
     // Cleanup function to reset timeout if answers change before 2s
     return () => clearTimeout(timeoutId);
-  }, [answers, annotations, submissionId, db]);
+  }, [answers, annotations, submissionId, db, gradedResult]);
 }

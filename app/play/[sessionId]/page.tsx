@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -24,6 +24,8 @@ import dynamic from "next/dynamic";
 import SplitLayout from "@/components/layout/SplitLayout";
 import QuestionSidebar from "@/components/sidebar/QuestionSidebar";
 import { useAutoSaveProgress } from "@/hooks/useAutoSaveProgress";
+import { useAntiCheat } from "@/hooks/useAntiCheat";
+import { calculateScore } from "@/lib/calculateScore";
 
 const PdfCanvasWrapper = dynamic(
   () => import("@/components/canvas/PdfCanvasWrapper"),
@@ -298,12 +300,27 @@ export default function StudentPlayPage() {
   const totalQuestions = allItems.length;
   const completedCount = Object.keys(studentAnswers || {}).length;
 
+  // Real-time auto-grading
+  const gradedResult = useMemo(() => {
+    if (!draft?.sections || Object.keys(studentAnswers || {}).length === 0) {
+      return null;
+    }
+    return calculateScore(studentAnswers, draft.sections);
+  }, [studentAnswers, draft?.sections]);
+
+  // Anti-Cheat Engine
+  const { cheatLogs, totalWarnings } = useAntiCheat(
+    sessionData?.submissionId,
+    db
+  );
+
   useAutoSaveProgress({
     answers: studentAnswers,
     annotations,
     totalQuestions,
     submissionId: sessionData?.submissionId,
     db,
+    gradedResult,
   });
 
   const handleStudentSubmit = async () => {
@@ -317,6 +334,11 @@ export default function StudentPlayPage() {
     if (!sessionData?.submissionId) return;
 
     try {
+      // Calculate final score at submission time
+      const finalGrade = draft?.sections
+        ? calculateScore(studentAnswers, draft.sections)
+        : null;
+
       await updateDoc(
         doc(db, "student_submissions", sessionData.submissionId),
         {
@@ -324,6 +346,21 @@ export default function StudentPlayPage() {
           status: "submitted",
           answers: studentAnswers,
           annotations: annotations,
+          cheatLogs: {
+            blurCount: cheatLogs.blurCount,
+            tabSwitchCount: cheatLogs.tabSwitchCount,
+            copyAttempts: cheatLogs.copyAttempts,
+            pasteAttempts: cheatLogs.pasteAttempts,
+            rightClickAttempts: cheatLogs.rightClickAttempts,
+          },
+          warnings: totalWarnings,
+          ...(finalGrade
+            ? {
+                score: `${finalGrade.totalScore}/${finalGrade.maxScore}`,
+                percentage: finalGrade.percentage,
+                gradedAnswers: finalGrade.gradedAnswers,
+              }
+            : {}),
           submittedAt: serverTimestamp(),
         }
       );
