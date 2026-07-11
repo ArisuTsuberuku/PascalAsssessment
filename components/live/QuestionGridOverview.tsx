@@ -4,6 +4,7 @@ import React from "react";
 import { AlertTriangle, ShieldAlert, Eye } from "lucide-react";
 import type { GradedAnswer } from "@/lib/calculateScore";
 import type { Item } from "@/types/assignment";
+import { evaluateAnswer } from "@/lib/evaluateAnswer";
 
 export interface GridStudentData {
   id: string;
@@ -23,89 +24,83 @@ export interface GridStudentData {
   warnings?: number;
   score?: string;
   percentage?: number;
+  needsHelp?: boolean;
 }
 
 interface QuestionGridOverviewProps {
   students: GridStudentData[];
   assignmentItems: Item[];
   onSelectStudent: (student: GridStudentData) => void;
+  onDismissRaiseHand?: (studentId: string, e?: React.MouseEvent) => void;
 }
 
 /**
- * Determines the cell color based on grading status
+ * Determines the cell color based strictly on evaluateAnswer engine status (on the fly)
  */
 function getCellColorClass(
-  itemId: string,
+  item: Item,
   student: GridStudentData
 ): string {
-  const answer = student.answers?.[itemId];
-  const graded = student.gradedAnswers?.[itemId];
+  const rawAnswer = student.answers?.[item.id];
+  const gradingResult = evaluateAnswer(item, rawAnswer);
 
-  // If graded, use grading status
-  if (graded) {
-    switch (graded.status) {
-      case "correct":
-        return "bg-emerald-500/70 border-emerald-400/50";
-      case "incorrect":
-        return "bg-rose-500/70 border-rose-400/50";
-      case "partial":
-        return "bg-amber-500/60 border-amber-400/50";
-      case "ungraded":
-        return "bg-purple-500/50 border-purple-400/40";
-      case "skipped":
-        return "bg-slate-700/50 border-slate-600/30";
-      default:
-        return "bg-slate-700/50 border-slate-600/30";
-    }
+  switch (gradingResult.status) {
+    case "correct":
+      return "bg-emerald-500/70 border-emerald-400/50";
+    case "incorrect":
+      return "bg-rose-500/70 border-rose-400/50";
+    case "partial":
+      return "bg-amber-500/60 border-amber-400/50";
+    case "needs_grading":
+      return "bg-purple-500/50 border-purple-400/40";
+    case "skipped":
+    default:
+      return "bg-slate-700/50 border-slate-600/30";
   }
-
-  // Not graded yet: check if answer exists
-  if (answer !== undefined && answer !== null && answer !== "") {
-    // Check if answer is "empty" (empty string, empty array, or empty object)
-    if (typeof answer === "string" && answer.trim().length === 0) {
-      return "bg-slate-700/50 border-slate-600/30"; // Grey: no real answer
-    }
-    if (typeof answer === "object") {
-      if (Array.isArray(answer) && answer.length === 0) {
-        return "bg-slate-700/50 border-slate-600/30";
-      }
-      // Check for selectedHash or other valid fields
-      if (answer.selectedHash || answer.selectedHashes?.length > 0 || answer.text || answer.value || answer.connections?.length > 0) {
-        return "bg-blue-500/60 border-blue-400/50"; // Blue: attempted
-      }
-      if (Object.keys(answer).length > 0) {
-        return "bg-blue-500/60 border-blue-400/50"; // Blue: attempted
-      }
-    }
-    return "bg-blue-500/60 border-blue-400/50"; // Blue: attempted
-  }
-
-  return "bg-slate-700/50 border-slate-600/30"; // Grey: not started
 }
 
 /**
- * Get cell tooltip text
+ * Get cell tooltip text strictly using evaluateAnswer engine (on the fly)
  */
 function getCellTooltip(
-  itemId: string,
-  itemName: string,
+  item: Item,
+  idx: number,
   student: GridStudentData
 ): string {
-  const graded = student.gradedAnswers?.[itemId];
-  if (graded) {
-    const statusMap: Record<string, string> = {
-      correct: "✅ Đúng",
-      incorrect: "❌ Sai",
-      partial: "🟡 Đúng một phần",
-      ungraded: "📝 Chờ chấm thủ công",
-      skipped: "⬜ Bỏ qua",
-    };
-    return `${itemName}: ${statusMap[graded.status] || graded.status} (${graded.earnedPoints}/${graded.maxPoints} điểm)`;
-  }
+  const rawAnswer = student.answers?.[item.id];
+  const gradingResult = evaluateAnswer(item, rawAnswer);
 
-  const answer = student.answers?.[itemId];
-  if (answer !== undefined && answer !== null) return `${itemName}: Đã trả lời (chưa chấm)`;
-  return `${itemName}: Chưa làm`;
+  const maxPts =
+    item.points ||
+    (item as any).maxScore ||
+    gradingResult.maxScore ||
+    1;
+  const itemName = item.name || `Câu ${idx + 1}`;
+
+  const statusMap: Record<string, string> = {
+    correct: "✅ Đúng",
+    incorrect: "❌ Sai",
+    partial: "🟡 Đúng một phần",
+    needs_grading: "📝 Chờ chấm thủ công",
+    skipped: "⬜ Bỏ qua",
+  };
+
+  return `${itemName}: ${
+    statusMap[gradingResult.status] || gradingResult.status
+  } (${gradingResult.score}/${maxPts} điểm)`;
+}
+
+function calculateStudentTotalScore(
+  student: GridStudentData,
+  assignmentItems: Item[]
+): number {
+  let total = 0;
+  for (const item of assignmentItems) {
+    const rawAns = student.answers?.[item.id];
+    const gradingResult = evaluateAnswer(item, rawAns);
+    total += gradingResult.score;
+  }
+  return Number(total.toFixed(2));
 }
 
 /**
@@ -122,6 +117,7 @@ export default function QuestionGridOverview({
   students,
   assignmentItems,
   onSelectStudent,
+  onDismissRaiseHand,
 }: QuestionGridOverviewProps) {
   if (assignmentItems.length === 0) {
     return (
@@ -134,17 +130,17 @@ export default function QuestionGridOverview({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
+    <div className="rounded-2xl border border-emerald-200 bg-white overflow-hidden shadow-xl">
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2.5 border-b border-slate-800 bg-slate-900/80">
-        <span className="text-xs font-semibold text-slate-400">Chú thích:</span>
+      <div className="flex items-center gap-4 px-4 py-2.5 border-b border-emerald-100 bg-emerald-50/60">
+        <span className="text-xs font-semibold text-slate-600">Chú thích:</span>
         <div className="flex items-center gap-3 flex-wrap">
-          <LegendDot color="bg-slate-700/50" label="Chưa làm" />
-          <LegendDot color="bg-blue-500/60" label="Đã trả lời" />
-          <LegendDot color="bg-emerald-500/70" label="Đúng" />
-          <LegendDot color="bg-rose-500/70" label="Sai" />
-          <LegendDot color="bg-amber-500/60" label="Đúng 1 phần" />
-          <LegendDot color="bg-purple-500/50" label="Chờ chấm" />
+          <LegendDot color="bg-slate-200" label="Chưa làm" />
+          <LegendDot color="bg-blue-500" label="Đã trả lời" />
+          <LegendDot color="bg-emerald-500" label="Đúng" />
+          <LegendDot color="bg-rose-500" label="Sai" />
+          <LegendDot color="bg-amber-500" label="Đúng 1 phần" />
+          <LegendDot color="bg-purple-500" label="Chờ chấm" />
         </div>
       </div>
 
@@ -153,25 +149,25 @@ export default function QuestionGridOverview({
         <table className="w-full border-collapse text-xs">
           {/* Header Row */}
           <thead>
-            <tr className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm">
-              <th className="sticky left-0 z-20 bg-slate-900/95 backdrop-blur-sm text-left px-4 py-2.5 border-b border-r border-slate-800 min-w-[200px]">
-                <span className="text-xs font-bold text-slate-300 uppercase tracking-wide">
+            <tr className="sticky top-0 z-10 bg-emerald-100 text-emerald-900">
+              <th className="sticky left-0 z-20 bg-emerald-100 text-emerald-900 text-left px-4 py-2.5 border-b border-r border-emerald-200 min-w-[200px]">
+                <span className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
                   Học sinh
                 </span>
               </th>
               {assignmentItems.map((item, idx) => (
                 <th
                   key={item.id}
-                  className="px-1.5 py-2.5 border-b border-slate-800 text-center min-w-[36px]"
+                  className="px-1.5 py-2.5 border-b border-emerald-200 text-center min-w-[36px]"
                   title={item.name || `Câu ${idx + 1}`}
                 >
-                  <span className="font-bold text-slate-400">
+                  <span className="font-bold text-emerald-900">
                     Q{idx + 1}
                   </span>
                 </th>
               ))}
-              <th className="px-3 py-2.5 border-b border-l border-slate-800 text-center min-w-[80px]">
-                <span className="font-bold text-slate-300 uppercase tracking-wide">Điểm</span>
+              <th className="px-3 py-2.5 border-b border-l border-emerald-200 text-center min-w-[80px]">
+                <span className="font-bold text-emerald-900 uppercase tracking-wide">Điểm</span>
               </th>
             </tr>
           </thead>
@@ -192,17 +188,28 @@ export default function QuestionGridOverview({
                 <tr
                   key={student.id}
                   onClick={() => onSelectStudent(student)}
-                  className="group cursor-pointer hover:bg-slate-800/50 transition-colors"
+                  className="group cursor-pointer hover:bg-emerald-50 transition-colors"
                 >
                   {/* Student Name Cell (Sticky) */}
-                  <td className="sticky left-0 z-10 bg-slate-900/95 group-hover:bg-slate-800/80 backdrop-blur-sm px-4 py-2 border-b border-r border-slate-800">
+                  <td className="sticky left-0 z-10 bg-white group-hover:bg-emerald-50 px-4 py-2 border-b border-r border-slate-200">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-[10px]">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-bold text-[10px]">
                         {displayName.charAt(0).toUpperCase()}
                       </div>
-                      <span className="font-semibold text-white truncate max-w-[120px]">
+                      <span className="font-semibold text-slate-800 truncate max-w-[120px]">
                         {displayName}
                       </span>
+
+                      {/* Raise Hand Indicator */}
+                      {student.needsHelp && (
+                        <button
+                          onClick={(e) => onDismissRaiseHand?.(student.id, e)}
+                          className="ml-0.5 animate-pulse text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] hover:scale-110 transition-transform"
+                          title="Click để tắt thông báo gọi hỗ trợ"
+                        >
+                          ✋
+                        </button>
+                      )}
 
                       {/* Anti-Cheat Alert Icon */}
                       {cheatSeverity === "low" && (
@@ -236,11 +243,11 @@ export default function QuestionGridOverview({
                     <td
                       key={item.id}
                       className="px-0.5 py-1 border-b border-slate-800/50 text-center"
-                      title={getCellTooltip(item.id, item.name || `Câu ${idx + 1}`, student)}
+                      title={getCellTooltip(item, idx, student)}
                     >
                       <div
                         className={`mx-auto h-6 w-6 rounded-md border transition-all ${getCellColorClass(
-                          item.id,
+                          item,
                           student
                         )} group-hover:scale-110`}
                       />
@@ -253,12 +260,10 @@ export default function QuestionGridOverview({
                       className={`font-bold ${
                         isDone
                           ? "text-indigo-300"
-                          : student.score
-                          ? "text-slate-300"
-                          : "text-slate-500"
+                          : "text-slate-300"
                       }`}
                     >
-                      {student.score || "—"}
+                      {calculateStudentTotalScore(student, assignmentItems)}đ
                     </span>
                     {student.percentage !== undefined && (
                       <div className="text-[9px] text-slate-400 mt-0.5">

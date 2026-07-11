@@ -102,19 +102,19 @@ function StudentLobbyForm() {
   };
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl backdrop-blur-xl">
+    <div className="w-full max-w-md rounded-xl border border-gray-100 bg-white p-8 shadow-xl">
       <div className="flex flex-col items-center text-center mb-8">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-600 text-white shadow-lg shadow-purple-600/40">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
           <Users className="h-7 w-7" />
         </div>
-        <h1 className="text-2xl font-bold text-white">Phòng Chờ Học sinh</h1>
-        <p className="text-slate-400 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-slate-800">Phòng Chờ Học sinh</h1>
+        <p className="text-slate-600 text-sm mt-1">
           Nhập thông tin để tham gia làm bài kiểm tra trực tiếp
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-50 p-3 text-center text-sm text-red-600">
           {error}
         </div>
       )}
@@ -122,7 +122,7 @@ function StudentLobbyForm() {
       <form onSubmit={handleJoin} className="space-y-5">
         {/* Class Code Input */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
             Mã lớp học (6 ký tự) *
           </label>
           <input
@@ -132,13 +132,13 @@ function StudentLobbyForm() {
             placeholder="VD: CALC88"
             value={classCode}
             onChange={(e) => setClassCode(e.target.value.toUpperCase())}
-            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-center font-mono text-lg font-bold tracking-widest text-purple-300 placeholder-slate-600 focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center font-mono text-lg font-bold tracking-widest text-emerald-700 placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
           />
         </div>
 
         {/* Full Name Input */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
             Họ và Tên *
           </label>
           <input
@@ -147,13 +147,13 @@ function StudentLobbyForm() {
             placeholder="VD: Nguyễn Văn A"
             value={studentName}
             onChange={(e) => setStudentName(e.target.value)}
-            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none"
           />
         </div>
 
         {/* Mode Dropdown */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
             Chế độ làm bài
           </label>
           <select
@@ -161,7 +161,7 @@ function StudentLobbyForm() {
             onChange={(e) =>
               setMode(e.target.value as "individual" | "group")
             }
-            className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none"
           >
             <option value="individual">Cá nhân (Individual)</option>
             <option value="group">Nhóm (Group)</option>
@@ -171,8 +171,8 @@ function StudentLobbyForm() {
         {/* Dynamic Team Name Input for Group Mode */}
         {mode === "group" && (
           <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-purple-300 mb-1.5 flex items-center gap-1.5">
-              <UserCheck className="h-3.5 w-3.5 text-purple-400" />
+            <label className="block text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1.5 flex items-center gap-1.5">
+              <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
               <span>Tên Nhóm (VD: Nhóm 1) *</span>
             </label>
             <input
@@ -181,7 +181,7 @@ function StudentLobbyForm() {
               placeholder="VD: Nhóm 1"
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              className="w-full rounded-xl border border-purple-500/50 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-purple-400 focus:ring-1 focus:ring-purple-400 focus:outline-none"
+              className="w-full rounded-xl border border-emerald-400 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
             />
           </div>
         )}
@@ -189,7 +189,7 @@ function StudentLobbyForm() {
         <button
           type="submit"
           disabled={joining}
-          className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 font-semibold text-white shadow-lg shadow-purple-600/30 transition-all hover:bg-purple-500 active:scale-[0.99] disabled:opacity-50"
+          className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
         >
           <Play className="h-4 w-4 fill-current" />
           <span>{joining ? "Đang kết nối..." : "Vào Phòng Thi"}</span>
@@ -201,15 +201,15 @@ function StudentLobbyForm() {
 
 export default function StudentLobbyPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-950 to-slate-900">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-[#f4fbf7] to-white">
       <Link
         href="/"
-        className="absolute top-6 left-6 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+        className="absolute top-6 left-6 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Quay lại Trang chủ
       </Link>
-      <Suspense fallback={<div className="text-slate-400">Đang tải...</div>}>
+      <Suspense fallback={<div className="text-slate-600">Đang tải...</div>}>
         <StudentLobbyForm />
       </Suspense>
     </main>

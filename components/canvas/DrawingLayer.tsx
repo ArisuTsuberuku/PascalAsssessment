@@ -1,24 +1,123 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Stage, Layer, Line, Text } from "react-konva";
+import { Stage, Layer, Line, Text, Image as KonvaImage, Transformer, Rect, Group } from "react-konva";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { Annotation } from "@/types/assignment";
+
+function KonvaUrlImage({
+  ann,
+  scaleX,
+  scaleY,
+  activeStudentTool,
+  removeAnnotation,
+  isDraggable,
+  onPositionChange,
+  isSelected,
+  onSelect,
+}: {
+  ann: Annotation;
+  scaleX: number;
+  scaleY: number;
+  activeStudentTool: string;
+  removeAnnotation: (id: string) => void;
+  isDraggable?: boolean;
+  onPositionChange?: (id: string, updates: Partial<Annotation>) => void;
+  isSelected?: boolean;
+  onSelect?: () => void;
+}) {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (!ann.imageUrl) return;
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.src = ann.imageUrl;
+    img.onload = () => {
+      setImage(img);
+    };
+  }, [ann.imageUrl]);
+
+  if (!image) return null;
+
+  return (
+    <KonvaImage
+      key={ann.id}
+      image={image}
+      x={(ann.x || 0) * scaleX}
+      y={(ann.y || 0) * scaleY}
+      width={(ann.width || 300) * scaleX}
+      height={(ann.height || 200) * scaleY}
+      id={ann.id}
+      draggable={isDraggable}
+      onClick={onSelect}
+      onTap={onSelect}
+      onDragEnd={(e) => {
+        if (onPositionChange) {
+          const newX = e.target.x() / scaleX;
+          const newY = e.target.y() / scaleY;
+          onPositionChange(ann.id, { x: newX, y: newY });
+        }
+      }}
+      onTransformEnd={(e) => {
+        if (onPositionChange) {
+          const node = e.target;
+          const sx = node.scaleX();
+          const sy = node.scaleY();
+          node.scaleX(1);
+          node.scaleY(1);
+          const newW = (ann.width || 300) * sx;
+          const newH = (ann.height || 200) * sy;
+          const newX = node.x() / scaleX;
+          const newY = node.y() / scaleY;
+          onPositionChange(ann.id, { x: newX, y: newY, width: newW, height: newH });
+        }
+      }}
+      onPointerDown={() => {
+        if (activeStudentTool === "eraser") removeAnnotation(ann.id);
+      }}
+    />
+  );
+}
 
 interface DrawingLayerProps {
   width: number;
   height: number;
   pageNumber: number;
+  role?: "teacher" | "student";
+  studentAnnotations?: Annotation[];
+  teacherAnnotations?: Annotation[];
+  onTeacherAnnotationAdd?: (ann: Annotation) => void;
+  onTeacherAnnotationRemove?: (id: string) => void;
+  onStudentAnnotationAdd?: (ann: Annotation) => void;
+  onStudentAnnotationRemove?: (id: string) => void;
+  isDrawingEnabled?: boolean;
+  mode?: "editor" | "session";
 }
 
 export default function DrawingLayer({
   width,
   height,
   pageNumber,
+  role = "student",
+  studentAnnotations,
+  teacherAnnotations,
+  onTeacherAnnotationAdd,
+  onTeacherAnnotationRemove,
+  onStudentAnnotationAdd,
+  onStudentAnnotationRemove,
+  isDrawingEnabled = false,
+  mode,
 }: DrawingLayerProps) {
   const activeStudentTool = useAssignmentEditorStore(
     (state) => state.activeStudentTool
   );
+  const activeTool = useAssignmentEditorStore((state) => state.activeTool);
+  const activeTargetingQuestionId = useAssignmentEditorStore((state) => state.activeTargetingQuestionId);
+  const setActiveTargetingQuestionId = useAssignmentEditorStore((state) => state.setActiveTargetingQuestionId);
+  const updateItem = useAssignmentEditorStore((state) => state.updateItem);
+  const setActiveTool = useAssignmentEditorStore((state) => state.setActiveTool);
+
   const activeColor = useAssignmentEditorStore((state) => state.activeColor);
   const activeStrokeWidth = useAssignmentEditorStore(
     (state) => state.activeStrokeWidth
@@ -27,6 +126,33 @@ export default function DrawingLayer({
   const setAnnotations = useAssignmentEditorStore(
     (state) => state.setAnnotations
   );
+  const draft = useAssignmentEditorStore((state) => state.draft);
+
+  const existingBoxes = React.useMemo(() => {
+    if (!draft || (mode !== "editor" && role !== "teacher")) return [];
+    const boxes: any[] = [];
+    draft.sections.forEach(sec => {
+      sec.items.forEach(item => {
+        if ((item as any).boundingBox && (item as any).boundingBox.pageNumber === pageNumber) {
+          boxes.push(item);
+        }
+      });
+    });
+    return boxes;
+  }, [draft, pageNumber, mode, role]);
+
+  const currentToolRef = useRef(activeTool);
+  const activeQuestionIdRef = useRef(activeTargetingQuestionId);
+  const isDrawingBox = useRef(false);
+  const startCoordsRef = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    currentToolRef.current = activeTool;
+  }, [activeTool]);
+
+  useEffect(() => {
+    activeQuestionIdRef.current = activeTargetingQuestionId;
+  }, [activeTargetingQuestionId]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({
@@ -59,9 +185,26 @@ export default function DrawingLayer({
 
   const [currentLine, setCurrentLine] = useState<Annotation | null>(null);
   const isDrawing = useRef(false);
+  const [tempBox, setTempBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   // Phase 1: Lifecycle State for Textbox Tool
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const trRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (selectedId && trRef.current) {
+      const node = trRef.current.getStage().findOne(`#${selectedId}`);
+      if (node) {
+        trRef.current.nodes([node]);
+        trRef.current.getLayer().batchDraw();
+      }
+    } else if (trRef.current) {
+      trRef.current.nodes([]);
+      trRef.current.getLayer().batchDraw();
+    }
+  }, [selectedId, annotations, teacherAnnotations, studentAnnotations]);
 
   // Phase 1: State Trace
   useEffect(() => {
@@ -82,52 +225,116 @@ export default function DrawingLayer({
     setEditingTextId(null);
   };
 
-  // Object Eraser helper (removes stroke or text by ID)
+  // Object Eraser helper (Asymmetric Permission Model)
   const removeAnnotation = (idToRemove: string) => {
-    setAnnotations((prev) => prev.filter((ann) => ann.id !== idToRemove));
+    const isTeacherAnn =
+      (teacherAnnotations || []).some((ann) => ann.id === idToRemove) ||
+      (studentAnnotations || annotations).find((a) => a.id === idToRemove)
+        ?.owner === "teacher";
+
+    // STUDENT RESTRICTION: Student CANNOT erase/modify Teacher annotations
+    if (role !== "teacher" && isTeacherAnn) {
+      console.warn("🚫 [Permission Denied] Student cannot erase teacher annotations.");
+      return;
+    }
+
+    // TEACHER OMNIPOTENT ADMIN: Teacher can erase/modify BOTH Teacher & Student annotations
+    if (role === "teacher") {
+      onTeacherAnnotationRemove?.(idToRemove);
+    } else {
+      setAnnotations((prev) => prev.filter((ann) => ann.id !== idToRemove));
+      onStudentAnnotationRemove?.(idToRemove);
+    }
   };
 
-  // Filter out any legacy white eraser strokes so only valid strokes/texts remain
-  const pageAnnotations = annotations.filter(
+  const updateAnnotation = (idToUpdate: string, updates: Partial<Annotation>) => {
+    const targetInTeacher = (teacherAnnotations || []).find((ann) => ann.id === idToUpdate);
+    const targetInStudent = (studentAnnotations || annotations).find((ann) => ann.id === idToUpdate);
+    const isTeacherAnn = targetInTeacher || targetInStudent?.owner === "teacher";
+
+    if (role !== "teacher" && isTeacherAnn) {
+      console.warn("🚫 [Permission Denied] Student cannot move teacher annotations.");
+      return;
+    }
+
+    if (targetInTeacher && onTeacherAnnotationAdd) {
+      onTeacherAnnotationAdd({ ...targetInTeacher, ...updates });
+      return;
+    }
+
+    setAnnotations((prev) =>
+      prev.map((ann) => (ann.id === idToUpdate ? { ...ann, ...updates } : ann))
+    );
+  };
+
+  // Dual-layer filtering & Reactive State Bindings
+  const effectiveStudentAnnotations =
+    mode === "editor"
+      ? []
+      : role === "teacher"
+      ? studentAnnotations || annotations
+      : annotations.length > 0 || !studentAnnotations
+      ? annotations
+      : studentAnnotations;
+
+  const studentPageAnnotations = (mode === "editor" ? [] : effectiveStudentAnnotations).filter(
+    (ann) => ann.pageNumber === pageNumber && ann.tool !== "eraser"
+  );
+  const teacherPageAnnotations = (mode === "editor" ? [] : teacherAnnotations || []).filter(
     (ann) => ann.pageNumber === pageNumber && ann.tool !== "eraser"
   );
 
+  const canDraw = mode === "session" || (isDrawingEnabled && mode !== "editor");
   const isDrawingMode =
-    activeStudentTool === "pen" ||
-    activeStudentTool === "highlighter" ||
-    activeStudentTool === "eraser" ||
-    activeStudentTool === "line" ||
-    activeStudentTool === "text";
+    canDraw &&
+    (activeStudentTool === "pointer" ||
+      activeStudentTool === "pen" ||
+      activeStudentTool === "highlighter" ||
+      activeStudentTool === "eraser" ||
+      activeStudentTool === "line" ||
+      activeStudentTool === "text");
+
+  const checkDeselect = (e: any) => {
+    const clickedOnEmpty = e.target === e.target.getStage();
+    if (clickedOnEmpty) {
+      setSelectedId(null);
+    }
+  };
 
   const handleMouseDown = (e: any) => {
-    if (!isDrawingMode) return;
-
-    // Phase 3: Stage Click to Commit
-    // 1. If we are currently editing text, a click anywhere on the canvas should commit it.
-    if (editingTextId) {
-      console.log(
-        "⚡ [EVENT] Stage clicked while editingTextId active -> committing text"
-      );
-      commitText();
-      return; // Stop executing further drawing/creating logic
-    }
-
-    // Do not draw lines when eraser is active
-    if (activeStudentTool === "eraser") return;
+    checkDeselect(e);
 
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    // 2. Handle Text Tool Click -> Create Text Annotation & Open Edit Mode
-    if (activeStudentTool === "text") {
-      console.log("⚡ [EVENT] PointerDown triggered for Text Tool at:", {
-        x: pos.x,
-        y: pos.y,
-      });
+    console.log("🖱️ [Step 1] Mouse Down. Current Tool Ref:", currentToolRef.current);
+    if (currentToolRef.current === "question_box" && activeQuestionIdRef.current) {
+      console.log("✅ [Step 2] Init Question Box. Target ID:", activeQuestionIdRef.current);
+      startCoordsRef.current = { x: pos.x, y: pos.y };
+      setTempBox({ x: pos.x, y: pos.y, width: 0, height: 0 });
+      isDrawingBox.current = true;
+      console.log("🎨 [Step 3] Rect Added to Canvas:", { x: pos.x, y: pos.y, width: 0, height: 0 });
+      return;
+    }
 
+    if (!isDrawingMode) return;
+
+    if (editingTextId) {
+      commitText();
+      return;
+    }
+
+    if (activeStudentTool === "eraser") return;
+
+    // Set default brush color to RED (#ef4444) for teacher ink
+    const effectiveColor =
+      role === "teacher" && (activeColor === "#000000" || !activeColor)
+        ? "#ef4444"
+        : activeColor;
+
+    if (activeStudentTool === "text") {
       const newId = `txt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      console.log("⚡ [EVENT] Creating new Text Annotation ID:", newId);
       const newTextObj: Annotation = {
         id: newId,
         type: "text",
@@ -135,20 +342,28 @@ export default function DrawingLayer({
         x: pos.x,
         y: pos.y,
         text: "",
-        color: activeColor,
+        color: effectiveColor,
         fontSize: 18,
         pageNumber,
+        canvasWidth: effectiveWidth,
+        canvasHeight: effectiveHeight,
+        owner: role,
       };
-      setAnnotations((prev) => [...prev, newTextObj]);
+      if (role === "teacher") {
+        onTeacherAnnotationAdd?.(newTextObj);
+      } else {
+        setAnnotations((prev) => [...prev, newTextObj]);
+        onStudentAnnotationAdd?.(newTextObj);
+      }
       setEditingTextId(newId);
       return;
     }
 
-    isDrawing.current = true;
+    if (activeStudentTool === "pointer") return;
 
+    isDrawing.current = true;
     const newId = `ann-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
-    // Straight Line rubber-band initial points [startX, startY, startX, startY]
     const initialPoints =
       activeStudentTool === "line"
         ? [pos.x, pos.y, pos.x, pos.y]
@@ -159,25 +374,40 @@ export default function DrawingLayer({
       type: "line",
       tool: activeStudentTool,
       points: initialPoints,
-      color: activeColor,
+      color: effectiveColor,
       strokeWidth:
         activeStudentTool === "highlighter"
           ? activeStrokeWidth * 3
           : activeStrokeWidth,
       pageNumber,
+      canvasWidth: effectiveWidth,
+      canvasHeight: effectiveHeight,
+      owner: role,
     };
 
     setCurrentLine(newLine);
   };
 
   const handleMouseMove = (e: any) => {
-    if (!isDrawing.current || !currentLine || !currentLine.points) return;
-
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    // Rubber-band straight line technique (update only last 2 coords)
+    if (isDrawingBox.current && currentToolRef.current === "question_box" && activeQuestionIdRef.current) {
+      const startX = startCoordsRef.current.x;
+      const startY = startCoordsRef.current.y;
+      
+      setTempBox({
+        x: Math.min(startX, pos.x),
+        y: Math.min(startY, pos.y),
+        width: Math.abs(pos.x - startX),
+        height: Math.abs(pos.y - startY),
+      });
+      return;
+    }
+
+    if (!isDrawing.current || !currentLine || !currentLine.points) return;
+
     if (currentLine.tool === "line") {
       const startX = currentLine.points[0];
       const startY = currentLine.points[1];
@@ -188,7 +418,6 @@ export default function DrawingLayer({
       return;
     }
 
-    // Freehand pen or highlighter
     setCurrentLine((prev) =>
       prev && prev.points
         ? {
@@ -200,10 +429,35 @@ export default function DrawingLayer({
   };
 
   const handleMouseUp = () => {
+    if (isDrawingBox.current && currentToolRef.current === "question_box" && tempBox && activeQuestionIdRef.current) {
+      console.log("🛑 [Step 4] Mouse Up. Finalizing Box.");
+      const finalBox = {
+        left: tempBox.x,
+        top: tempBox.y,
+        width: tempBox.width,
+        height: tempBox.height,
+        pageNumber: pageNumber,
+      };
+      
+      console.log("📍 [Step 5] Extracted Coordinates:", finalBox);
+      console.log("💾 [Step 6] Updating Question ID:", activeQuestionIdRef.current);
+      updateItem(activeQuestionIdRef.current, { boundingBox: finalBox });
+      setActiveTargetingQuestionId(null);
+      setActiveTool("select" as any);
+      setTempBox(null);
+      isDrawingBox.current = false;
+      return;
+    }
+
     if (!isDrawing.current || !currentLine) return;
     isDrawing.current = false;
 
-    setAnnotations((prev) => [...prev, currentLine]);
+    if (role === "teacher") {
+      onTeacherAnnotationAdd?.(currentLine);
+    } else {
+      setAnnotations((prev) => [...prev, currentLine]);
+      onStudentAnnotationAdd?.(currentLine);
+    }
     setCurrentLine(null);
   };
 
@@ -211,33 +465,43 @@ export default function DrawingLayer({
   const effectiveHeight = size.height > 0 ? size.height : height || 1200;
 
   const getCustomCursor = (tool: string) => {
-    if (tool === "pen") {
-      return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 21v-4.25L16.2 3.55a1.5 1.5 0 0 1 2.12 0l2.13 2.13a1.5 1.5 0 0 1 0 2.12L7.25 21H3Z" fill="black" stroke="white" stroke-width="2"/></svg>') 0 24, crosshair`;
-    }
-    if (tool === "highlighter") {
-      return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M19 3l2 2-6 6-2-2 6-6ZM3 21l3-10 4 4-10 3Z" fill="rgb(250, 204, 21)" stroke="black" stroke-width="1.5"/></svg>') 0 24, crosshair`;
-    }
-    if (tool === "eraser") {
-      return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="white" stroke="black" stroke-width="2"/><line x1="3" y1="12" x2="21" y2="12" stroke="black" stroke-width="2"/></svg>') 12 12, cell`;
-    }
+    if (activeTool === "question_box" && activeTargetingQuestionId) return "crosshair";
+    if (mode === "editor" || !canDraw) return "default";
+    if (tool === "pen") return "crosshair"; // Standard high-contrast OS-adaptive
+    if (tool === "highlighter") return "crosshair";
+    if (tool === "eraser") return "pointer";
     if (tool === "text") return "text";
     if (tool === "line") return "crosshair";
     return "default";
   };
 
+  const isActiveDrawingTool =
+    activeStudentTool === "pen" ||
+    activeStudentTool === "highlighter" ||
+    activeStudentTool === "eraser" ||
+    activeStudentTool === "line" ||
+    activeStudentTool === "text" ||
+    Boolean(activeTool === "question_box" && activeTargetingQuestionId);
+
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 w-full h-full z-40"
+      className={`absolute inset-0 w-full h-full ${
+        isActiveDrawingTool ? "z-[60]" : "z-10"
+      }`}
       style={{
         cursor: getCustomCursor(activeStudentTool),
-        pointerEvents: isDrawingMode ? "auto" : "none",
+        pointerEvents:
+          isDrawingMode || (activeTool === "question_box" && activeTargetingQuestionId)
+            ? "auto"
+            : "none",
       }}
     >
       {/* 1. KONVA STAGE */}
       <Stage
         width={effectiveWidth}
         height={effectiveHeight}
+        listening={canDraw || (activeTool === "question_box" && activeTargetingQuestionId !== null)}
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -246,7 +510,57 @@ export default function DrawingLayer({
         onTouchEnd={handleMouseUp}
       >
         <Layer>
-          {pageAnnotations.map((ann) => {
+          {tempBox && activeTool === "question_box" && activeTargetingQuestionId && (
+            <Rect
+              x={tempBox.x}
+              y={tempBox.y}
+              width={tempBox.width}
+              height={tempBox.height}
+              fill="rgba(59, 130, 246, 0.2)"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dash={[5, 5]}
+            />
+          )}
+
+          {existingBoxes.map((boxItem: any) => (
+            <Group
+              key={`qbox-${boxItem.id}`}
+              x={boxItem.boundingBox.left || boxItem.boundingBox.x}
+              y={boxItem.boundingBox.top || boxItem.boundingBox.y}
+              onPointerDown={() => {
+                if (activeStudentTool === "eraser") {
+                  updateItem(boxItem.id, { boundingBox: null });
+                }
+              }}
+              onPointerEnter={(e: any) => {
+                if (activeStudentTool === "eraser" && e.evt && e.evt.buttons === 1) {
+                  updateItem(boxItem.id, { boundingBox: null });
+                }
+              }}
+            >
+              <Rect
+                width={boxItem.boundingBox.width}
+                height={boxItem.boundingBox.height}
+                fill="rgba(59, 130, 246, 0.15)"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dash={[5, 5]}
+              />
+            </Group>
+          ))}
+
+          {[...studentPageAnnotations, ...teacherPageAnnotations].map((ann) => {
+            const scaleX = ann.canvasWidth
+              ? effectiveWidth / ann.canvasWidth
+              : 1;
+            const scaleY = ann.canvasHeight
+              ? effectiveHeight / ann.canvasHeight
+              : 1;
+
+            const canModify = role === "teacher" ? true : ann.owner !== "teacher";
+            const isDraggable = canModify && activeStudentTool === "pointer";
+
             // Render Konva <Text> (Hidden when being edited in HTML overlay)
             if (ann.type === "text" && ann.text !== undefined) {
               if (ann.id === editingTextId) return null;
@@ -254,27 +568,43 @@ export default function DrawingLayer({
               return (
                 <Text
                   key={ann.id}
-                  x={ann.x || 0}
-                  y={ann.y || 0}
+                  x={(ann.x || 0) * scaleX}
+                  y={(ann.y || 0) * scaleY}
                   text={ann.text}
                   fill={ann.color}
-                  fontSize={ann.fontSize || 18}
+                  fontSize={(ann.fontSize || 18) * scaleX}
                   fontFamily="sans-serif"
                   padding={4}
                   lineHeight={1.2}
+                  draggable={isDraggable}
+                  id={ann.id}
+                  onDragEnd={(e) => {
+                    const newX = e.target.x() / scaleX;
+                    const newY = e.target.y() / scaleY;
+                    updateAnnotation(ann.id, { x: newX, y: newY });
+                  }}
+                  onTransformEnd={(e) => {
+                    const node = e.target;
+                    const sx = node.scaleX();
+                    const sy = node.scaleY();
+                    node.scaleX(1);
+                    node.scaleY(1);
+                    const newSize = (ann.fontSize || 18) * Math.max(sx, sy);
+                    const newX = node.x() / scaleX;
+                    const newY = node.y() / scaleY;
+                    updateAnnotation(ann.id, { x: newX, y: newY, fontSize: newSize });
+                  }}
                   onClick={() => {
-                    if (
-                      activeStudentTool === "text" ||
-                      activeStudentTool === "pointer"
-                    ) {
+                    if (activeStudentTool === "pointer") setSelectedId(ann.id);
+                    if (ann.tool === "sticker") return;
+                    if (activeStudentTool === "text") {
                       setEditingTextId(ann.id);
                     }
                   }}
                   onTap={() => {
-                    if (
-                      activeStudentTool === "text" ||
-                      activeStudentTool === "pointer"
-                    ) {
+                    if (activeStudentTool === "pointer") setSelectedId(ann.id);
+                    if (ann.tool === "sticker") return;
+                    if (activeStudentTool === "text") {
                       setEditingTextId(ann.id);
                     }
                   }}
@@ -294,14 +624,37 @@ export default function DrawingLayer({
               );
             }
 
+            if (ann.type === "image" && ann.imageUrl) {
+              return (
+                <KonvaUrlImage
+                  key={ann.id}
+                  ann={ann}
+                  scaleX={scaleX}
+                  scaleY={scaleY}
+                  activeStudentTool={activeStudentTool}
+                  removeAnnotation={removeAnnotation}
+                  isDraggable={isDraggable}
+                  onPositionChange={updateAnnotation}
+                  isSelected={selectedId === ann.id}
+                  onSelect={() => {
+                    if (activeStudentTool === "pointer") setSelectedId(ann.id);
+                  }}
+                />
+              );
+            }
+
             if (!ann.points) return null;
+
+            const scaledPoints = ann.points.map((pt, idx) =>
+              idx % 2 === 0 ? pt * scaleX : pt * scaleY
+            );
 
             return (
               <Line
                 key={ann.id}
-                points={ann.points}
+                points={scaledPoints}
                 stroke={ann.color}
-                strokeWidth={ann.strokeWidth || 3}
+                strokeWidth={(ann.strokeWidth || 3) * scaleX}
                 tension={ann.tool === "line" ? 0 : 0.5}
                 lineCap="round"
                 lineJoin="round"
@@ -340,24 +693,106 @@ export default function DrawingLayer({
               }
             />
           )}
+
+          {/* Transformer for selected nodes */}
+          <Transformer
+            ref={trRef}
+            boundBoxFunc={(oldBox, newBox) => {
+              // Limit minimum size
+              if (newBox.width < 10 || newBox.height < 10) {
+                return oldBox;
+              }
+              return newBox;
+            }}
+          />
         </Layer>
       </Stage>
+
+      {/* HTML LAYER FOR BOUNDING BOX ACTIONS (Fades in on hover) */}
+      {(mode === "editor" || role === "teacher") && (
+        <div className="absolute inset-0 pointer-events-none z-50">
+          {existingBoxes.map((boxItem: any) => {
+            // If the item is placed on canvas, InteractiveCanvasItem handles its own hover/tools!
+            if (boxItem.placement === "canvas") return null;
+
+            const x = boxItem.boundingBox.left || boxItem.boundingBox.x;
+            const y = boxItem.boundingBox.top || boxItem.boundingBox.y;
+            const w = boxItem.boundingBox.width;
+            const h = boxItem.boundingBox.height;
+            const isDrawingNewBox = activeTool === "question_box" && activeTargetingQuestionId;
+
+            return (
+              <div
+                key={`html-del-${boxItem.id}`}
+                className="absolute group transition-opacity"
+                style={{
+                  left: x,
+                  top: y,
+                  width: w,
+                  height: h,
+                  pointerEvents: isDrawingNewBox ? "none" : "auto",
+                }}
+              >
+                {/* Header that fades in on hover */}
+                <div className="absolute left-0 bottom-full mb-1 w-full flex justify-between items-end opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div
+                    className="bg-indigo-600 text-white text-[11px] font-semibold px-2 py-1 rounded shadow-sm"
+                    style={{
+                      maxWidth: Math.min(150, w),
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {boxItem.name || "Câu hỏi"}
+                  </div>
+                  
+                  {mode === "editor" && (
+                    <button
+                      className="flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded p-1 shadow-sm transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        updateItem(boxItem.id, { boundingBox: null });
+                      }}
+                      title="Xóa vùng tương tác"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 2. HTML OVERLAYS (MUST BE OUTSIDE STAGE) */}
       {editingTextId &&
         (() => {
-          const activeAnnotation = annotations.find(
+          const allAnnotations = [
+            ...(studentAnnotations || annotations),
+            ...(teacherAnnotations || []),
+          ];
+          const activeAnnotation = allAnnotations.find(
             (a) => a.id === editingTextId
           );
-          console.log(
-            "🎨 [RENDER] Attempting to render HTML Overlay for annotation:",
-            activeAnnotation
-          );
 
-          if (!activeAnnotation) {
-            console.log("❌ [RENDER ERROR] activeAnnotation is undefined!");
-            return null;
-          }
+          if (!activeAnnotation) return null;
 
           return (
             <div
@@ -375,9 +810,7 @@ export default function DrawingLayer({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setAnnotations((prev) =>
-                    prev.filter((a) => a.id !== editingTextId)
-                  );
+                  removeAnnotation(editingTextId);
                   setEditingTextId(null);
                 }}
                 style={{

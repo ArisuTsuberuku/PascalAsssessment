@@ -17,10 +17,10 @@ export default function SplitLayout({
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#f4fbf7] text-slate-800">
       {/* Optional Top Header Bar */}
       {headerContent && (
-        <div className="shrink-0 border-b border-slate-800 bg-slate-900/90 z-20">
+        <div className="shrink-0 border-b border-emerald-200 bg-white z-20">
           {headerContent}
         </div>
       )}
@@ -35,7 +35,7 @@ export default function SplitLayout({
         {/* Mobile / Tablet Toggle Button for 20% Sidebar */}
         <button
           onClick={() => setMobileDrawerOpen(!mobileDrawerOpen)}
-          className="lg:hidden fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xl hover:bg-indigo-500 transition-all"
+          className="lg:hidden fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xl hover:bg-emerald-700 transition-all"
         >
           {mobileDrawerOpen ? (
             <>
@@ -54,19 +54,19 @@ export default function SplitLayout({
         <div
           className={`${
             mobileDrawerOpen
-              ? "fixed inset-x-0 bottom-0 max-h-[75vh] z-40 rounded-t-2xl shadow-2xl border-t border-slate-700 bg-slate-900"
+              ? "fixed inset-x-0 bottom-0 max-h-[75vh] z-40 rounded-t-2xl shadow-2xl border-t border-emerald-200 bg-white"
               : "hidden lg:flex lg:w-1/5"
-          } h-full overflow-y-auto border-l border-slate-800 bg-slate-900/95 transition-all`}
+          } h-full overflow-y-auto border-l border-emerald-200 bg-white transition-all`}
         >
           <div className="w-full h-full flex flex-col">
             {mobileDrawerOpen && (
-              <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
+              <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-emerald-200 bg-white">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
                   Bảng Điều khiển 20%
                 </span>
                 <button
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="text-xs text-slate-500 hover:text-slate-800"
                 >
                   Đóng
                 </button>

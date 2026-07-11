@@ -30,11 +30,17 @@ export async function getAssignment(
  */
 export async function getAllAssignments(teacherId?: string): Promise<Assignment[]> {
   try {
-    const currentTeacherId = teacherId || auth?.currentUser?.uid;
+    let currentTeacherId = teacherId || auth?.currentUser?.uid;
+    if (!currentTeacherId && auth) {
+      await auth.authStateReady();
+      currentTeacherId = auth.currentUser?.uid;
+    }
+    if (!currentTeacherId) {
+      console.warn("getAllAssignments called without authenticated teacherId");
+      return [];
+    }
     const assignmentsRef = collection(db, COLLECTION_NAME);
-    const q = currentTeacherId
-      ? query(assignmentsRef, where("teacherId", "==", currentTeacherId))
-      : assignmentsRef;
+    const q = query(assignmentsRef, where("teacherId", "==", currentTeacherId));
     const querySnapshot = await getDocs(q);
     const assignments: Assignment[] = [];
     querySnapshot.forEach((docSnap) => {

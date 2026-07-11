@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   X,
   Eye,
@@ -15,6 +15,12 @@ import {
 import dynamic from "next/dynamic";
 import type { Assignment, Item } from "@/types/assignment";
 import type { GradedAnswer } from "@/lib/calculateScore";
+import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import StudentAnswerDisplay from "./StudentAnswerDisplay";
+import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
+import { evaluateAnswer } from "@/lib/evaluateAnswer";
+import { STATUS_CONFIG } from "@/components/ui/StatusBadge";
 
 const PdfCanvasWrapper = dynamic(
   () => import("@/components/canvas/PdfCanvasWrapper"),
@@ -105,17 +111,206 @@ function getStatusColorClass(status?: string) {
   }
 }
 
+function QuestionGradeCard({
+  item,
+  idx,
+  student,
+  onFocusItem,
+}: {
+  item: Item;
+  idx: number;
+  student: StudentFocusData;
+  onFocusItem: (payload: { pageNumber?: number; targetId: string; boundingBox?: any }) => void;
+}) {
+  const graded = student.gradedAnswers?.[item.id];
+  const rawAnswer = student.answers?.[item.id];
+  const gradingResult = useMemo(
+    () => evaluateAnswer(item, rawAnswer),
+    [item, rawAnswer]
+  );
+
+  const maxPoints =
+    item.points ||
+    (item as any).maxScore ||
+    gradingResult.maxScore ||
+    10;
+
+  const currentUI =
+    STATUS_CONFIG[gradingResult.status] || STATUS_CONFIG.skipped;
+
+  const [isEditingScore, setIsEditingScore] = useState(false);
+  const [manualScoreVal, setManualScoreVal] = useState<number | string>("");
+  const [feedbackVal, setFeedbackVal] = useState<string>(
+    graded?.feedback || ""
+  );
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    setFeedbackVal(graded?.feedback || "");
+  }, [graded?.feedback]);
+
+  const displayedScore = isEditingScore ? manualScoreVal : gradingResult.score;
+
+  const handleSave = async (
+    scoreInput: number | string,
+    feedbackInput: string
+  ) => {
+    if (!student.id) return;
+    const numScore =
+      typeof scoreInput === "number"
+        ? scoreInput
+        : parseFloat(String(scoreInput));
+
+    if (isNaN(numScore)) return;
+
+    setSaving(true);
+    const status =
+      numScore > 0
+        ? numScore >= maxPoints
+          ? "correct"
+          : "partial"
+        : "incorrect";
+
+    const payloadKey = `gradedAnswers.${item.id}`;
+    try {
+      await updateDoc(doc(db, "student_submissions", student.id), {
+        [payloadKey]: {
+          itemId: item.id,
+          itemName: item.name || `Câu ${idx + 1}`,
+          itemType: item.type || "unknown",
+          earnedPoints: numScore,
+          maxPoints: maxPoints,
+          score: numScore,
+          feedback: feedbackInput,
+          status,
+        },
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Lỗi cập nhật điểm Firestore:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className={`p-3 rounded-xl border transition-all shadow-sm ${currentUI.border} ${currentUI.bg}`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="text-[11px] font-mono font-bold text-slate-400">
+            #{idx + 1}
+          </span>
+          <span className="text-sm">{currentUI.icon}</span>
+          <span className="text-xs font-semibold text-slate-200 truncate">
+            {item.name || `Câu ${idx + 1}`}
+          </span>
+        </div>
+        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+          Tối đa: {maxPoints}đ
+        </span>
+      </div>
+
+      <StudentAnswerDisplay
+        item={item}
+        rawAnswer={rawAnswer}
+        onFocusItem={onFocusItem}
+      />
+
+      <div className="flex flex-col gap-2 mt-1">
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-[11px] text-slate-300 shrink-0 font-semibold">
+            Chấm điểm:
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={maxPoints}
+              step={0.25}
+              value={displayedScore}
+              onFocus={() => {
+                setIsEditingScore(true);
+                setManualScoreVal(gradingResult.score);
+              }}
+              onChange={(e) => setManualScoreVal(e.target.value)}
+              onBlur={() => {
+                setIsEditingScore(false);
+                handleSave(manualScoreVal, feedbackVal);
+              }}
+              style={{
+                width: `${Math.max(String(displayedScore ?? "").length, 1) + 3}ch`,
+              }}
+              className="appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[40px] rounded-lg bg-slate-950 border border-slate-700 px-1 py-1 text-xs font-bold text-white text-center focus:border-purple-500 focus:outline-none transition-colors"
+              placeholder="0"
+            />
+            {saving && (
+              <span className="text-[10px] text-purple-400 font-medium animate-pulse">
+                Đang lưu...
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <textarea
+            rows={2}
+            value={feedbackVal}
+            onChange={(e) => setFeedbackVal(e.target.value)}
+            onBlur={() => handleSave(displayedScore, feedbackVal)}
+            placeholder="Nhận xét của giáo viên..."
+            className="w-full rounded-lg bg-slate-950 border border-slate-700 p-2 text-xs text-slate-200 placeholder-slate-500 focus:border-purple-500 focus:outline-none resize-none transition-colors"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StudentFocusView({
   student,
   assignment,
   assignmentItems,
   onClose,
 }: StudentFocusViewProps) {
+  const [liveStudentData, setLiveStudentData] = useState<any>(student);
+  const { setActivePdfPage } = useAssignmentEditorStore();
+
+  const handleFocusItem = (payload: { pageNumber?: number; targetId: string; boundingBox?: any }) => {
+    if (payload.pageNumber !== undefined && payload.pageNumber !== null) {
+      setActivePdfPage(payload.pageNumber);
+      setTimeout(() => {
+        document.getElementById(`pdf-page-${payload.pageNumber}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 50);
+    }
+  };
+
+  useEffect(() => {
+    setLiveStudentData(student);
+  }, [student]);
+
+  useEffect(() => {
+    if (!student?.id) return;
+    const docRef = doc(db, "student_submissions", student.id);
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = { id: snapshot.id, ...snapshot.data() } as any;
+      setLiveStudentData(data);
+    });
+    return () => unsubscribe();
+  }, [student?.id]);
+
+  const effectiveStudent = liveStudentData || student;
+
   const displayName =
-    student.studentName ||
-    student.name ||
-    student.fullName ||
-    student.id;
+    effectiveStudent.studentName ||
+    effectiveStudent.name ||
+    effectiveStudent.fullName ||
+    effectiveStudent.id;
 
   const tabSwitches =
     student.cheatLogs?.tabSwitchCount ?? student.warnings ?? 0;
@@ -125,6 +320,29 @@ export default function StudentFocusView({
   const rightClicks = student.cheatLogs?.rightClickAttempts ?? 0;
   const totalViolations =
     tabSwitches + blurCount + copyAttempts + pasteAttempts + rightClicks;
+
+  const totalScore = useMemo(() => {
+    let sum = 0;
+    for (const item of assignmentItems) {
+      const graded = student.gradedAnswers?.[item.id];
+      if (
+        graded &&
+        (graded.score !== undefined || graded.earnedPoints !== undefined)
+      ) {
+        const val =
+          typeof graded.score === "number"
+            ? graded.score
+            : typeof graded.earnedPoints === "number"
+            ? graded.earnedPoints
+            : parseFloat(String(graded.score ?? graded.earnedPoints ?? 0)) || 0;
+        sum += val;
+      } else {
+        const rawAns = student.answers?.[item.id];
+        sum += evaluateAnswer(item, rawAns).score;
+      }
+    }
+    return Number(sum.toFixed(2));
+  }, [student.gradedAnswers, student.answers, assignmentItems]);
 
   const isDone =
     student.status === "submitted" || student.status === "Đã nộp";
@@ -150,18 +368,18 @@ export default function StudentFocusView({
             </span>
           )}
 
-          {/* Score */}
-          {student.score && (
-            <span className="text-xs text-slate-400">
-              Điểm:{" "}
-              <strong className="text-indigo-300">{student.score}</strong>
-              {student.percentage !== undefined && (
-                <span className="text-slate-500 ml-1">
-                  ({student.percentage}%)
-                </span>
-              )}
-            </span>
-          )}
+          {/* Reactive Total Score Header */}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-300 border border-emerald-500/30 shadow-sm">
+            <span>Tổng điểm:</span>
+            <strong className="text-white text-sm font-extrabold">
+              {totalScore}
+            </strong>
+            {student.score && (
+              <span className="text-slate-400 font-normal ml-0.5">
+                (Tự động: {student.score})
+              </span>
+            )}
+          </span>
 
           {/* Anti-cheat Warning */}
           {totalViolations > 0 && (
@@ -199,9 +417,18 @@ export default function StudentFocusView({
             <PdfCanvasWrapper
               fileUrl={assignment.pdfUrl}
               initialData={assignment}
-              liveStudentData={student}
+              liveStudentData={effectiveStudent}
+              studentAnnotations={
+                effectiveStudent.studentAnnotations ||
+                effectiveStudent.annotations ||
+                []
+              }
+              teacherAnnotations={effectiveStudent.teacherAnnotations || []}
               isPreviewMode={true}
               isLiveMonitor={true}
+              role="teacher"
+              isDrawingEnabled={true}
+              mode="session"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-slate-400 text-sm">
@@ -211,41 +438,22 @@ export default function StudentFocusView({
         </div>
 
         {/* Info Sidebar (Right Panel) */}
-        <div className="w-72 shrink-0 border-l border-slate-800 bg-slate-900/95 overflow-y-auto">
-          {/* Question Status List */}
+        <div className="w-80 shrink-0 border-l border-slate-800 bg-slate-900/95 overflow-y-auto">
+          {/* Question Status List & Interactive Grading */}
           <div className="p-4 border-b border-slate-800">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3">
-              Trạng thái câu hỏi
+              Chấm điểm & Trạng thái câu hỏi
             </h3>
-            <div className="space-y-1.5">
-              {assignmentItems.map((item, idx) => {
-                const graded = student.gradedAnswers?.[item.id];
-                const hasAnswer = student.answers?.[item.id] !== undefined;
-
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-800/50 transition-colors"
-                  >
-                    <span className="text-[10px] font-mono text-slate-500 w-5 text-right shrink-0">
-                      {idx + 1}
-                    </span>
-                    {getStatusIcon(graded?.status || (hasAnswer ? "ungraded" : undefined))}
-                    <span className="text-xs text-slate-300 truncate flex-1">
-                      {item.name || `Câu ${idx + 1}`}
-                    </span>
-                    {graded && (
-                      <span
-                        className={`text-[10px] font-bold ${getStatusColorClass(
-                          graded.status
-                        )}`}
-                      >
-                        {graded.earnedPoints}/{graded.maxPoints}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="space-y-3">
+              {assignmentItems.map((item, idx) => (
+                <QuestionGradeCard
+                  key={item.id}
+                  item={item}
+                  idx={idx}
+                  student={student}
+                  onFocusItem={handleFocusItem}
+                />
+              ))}
             </div>
           </div>
 

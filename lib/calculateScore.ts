@@ -13,6 +13,8 @@ export interface GradedAnswer {
   status: "correct" | "incorrect" | "partial" | "skipped" | "ungraded";
   earnedPoints: number;
   maxPoints: number;
+  score?: number;
+  feedback?: string;
 }
 
 export interface ScoreResult {
@@ -165,52 +167,45 @@ function gradeShortInput(
     return { ...base, status: "skipped", earnedPoints: 0 };
   }
 
-  const correctAnswers: string[] = config.correctAnswers || [];
-  if (correctAnswers.length === 0) {
+  // Parse target answers from correctAnswer (string) or correctAnswers (array)
+  const rawTargets: string[] =
+    typeof config.correctAnswer === "string"
+      ? config.correctAnswer.split(",")
+      : Array.isArray(config.correctAnswers)
+      ? config.correctAnswers.flatMap((a: string) => a.split(","))
+      : [];
+
+  const targets = rawTargets
+    .map((s: string) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (targets.length === 0) {
     return { ...base, status: "ungraded", earnedPoints: 0 };
   }
 
-  // Split student input by semicolons, commas, or newlines to support multiple answers
-  const studentTokens = studentText
+  // Parse student answer into array
+  const studentAnswers = studentText
     .split(/[;,\n]+/)
-    .map((t: string) => normalize(t))
-    .filter((t: string) => t.length > 0);
+    .map((s: string) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const rawStudentLower = studentText.toLowerCase();
 
-  const caseSensitive = config.caseSensitive || false;
-  const normalizedCorrect = correctAnswers.map((a: string) =>
-    caseSensitive ? a.trim() : normalize(a)
-  );
-
-  // Count how many correct answers the student provided
-  const matchedCorrect = new Set<number>();
-  for (const token of studentTokens) {
-    const compareToken = caseSensitive ? token : normalize(token);
-    const idx = normalizedCorrect.findIndex(
-      (c: string, i: number) => !matchedCorrect.has(i) && c === compareToken
-    );
-    if (idx !== -1) {
-      matchedCorrect.add(idx);
+  // Count matches: if studentAnswers includes target or student's raw string includes target
+  let matchCount = 0;
+  for (const target of targets) {
+    if (studentAnswers.includes(target) || rawStudentLower.includes(target)) {
+      matchCount++;
     }
   }
 
-  const matchCount = matchedCorrect.size;
-  const totalCorrect = normalizedCorrect.length;
+  const score =
+    Math.round((matchCount / targets.length) * points * 100) / 100;
 
-  if (matchCount === totalCorrect) {
+  if (matchCount === targets.length) {
     return { ...base, status: "correct", earnedPoints: points };
   }
   if (matchCount > 0) {
-    const earned =
-      Math.round((matchCount / totalCorrect) * points * 100) / 100;
-    return { ...base, status: "partial", earnedPoints: earned };
-  }
-
-  // Single-answer legacy mode: check if entire input matches any single correct answer
-  const wholeNormalized = caseSensitive
-    ? studentText.trim()
-    : normalize(studentText);
-  if (normalizedCorrect.includes(wholeNormalized)) {
-    return { ...base, status: "correct", earnedPoints: points };
+    return { ...base, status: "partial", earnedPoints: score };
   }
 
   return { ...base, status: "incorrect", earnedPoints: 0 };
@@ -485,7 +480,10 @@ function gradeHighlightText(
  * Master grading function: routes to the appropriate grader per item type
  */
 function gradeItem(item: Item, answer: any): GradedAnswer {
-  const points = item.points || 0;
+  const points =
+    typeof item.points === "number"
+      ? item.points
+      : (item as any).maxScore || 1;
   const config = (item as any).config || {};
   let result: GradedAnswer;
 
@@ -499,6 +497,7 @@ function gradeItem(item: Item, answer: any): GradedAnswer {
     case "true-false":
       result = gradeTrueFalse(answer, config, points);
       break;
+    case "short_answer" as any:
     case "short-input":
       result = gradeShortInput(answer, config, points);
       break;
@@ -550,6 +549,7 @@ function gradeItem(item: Item, answer: any): GradedAnswer {
   // Inject item metadata
   result.itemId = item.id;
   result.itemName = item.name;
+
   return result;
 }
 
@@ -577,3 +577,5 @@ export function calculateScore(
 
   return { totalScore, maxScore, percentage, gradedAnswers };
 }
+
+export * from "./evaluateAnswer";

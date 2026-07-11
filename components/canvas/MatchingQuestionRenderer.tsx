@@ -298,11 +298,11 @@ export default function MatchingQuestionRenderer({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative overflow-hidden p-1 flex flex-col gap-2 bg-transparent"
+      className="w-full h-full relative overflow-hidden p-1 flex flex-col bg-transparent"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-indigo-200/60 pb-1 z-30">
-        <span className="text-[10px] font-bold text-indigo-900 drop-shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200/60 pb-1 mb-1 z-30">
+        <span className="text-[10px] leading-tight text-slate-500 drop-shadow-sm">
           {isPreviewMode
             ? "Nhấp điểm kết nối giữa 2 vế tương ứng:"
             : "Kéo thả vị trí & nhấp nối cặp để tạo đáp án:"}

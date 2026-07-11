@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, CheckCircle2, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Wifi, WifiOff, Users } from "lucide-react";
 
 export interface StudentStatsCardProps {
   studentId: string;
@@ -14,6 +14,11 @@ export interface StudentStatsCardProps {
   answeredCount?: number;
   totalQuestions?: number;
   answers?: Record<string, any>;
+  needsHelp?: boolean;
+  onDismissRaiseHand?: (e?: React.MouseEvent) => void;
+  mode?: "individual" | "group";
+  teamName?: string | null;
+  members?: Array<{ studentId: string; name: string; joinedAt?: string }>;
 }
 
 function StudentStatsCard({
@@ -26,6 +31,11 @@ function StudentStatsCard({
   answeredCount,
   totalQuestions,
   answers,
+  needsHelp,
+  onDismissRaiseHand,
+  mode = "individual",
+  teamName,
+  members = [],
 }: StudentStatsCardProps) {
   const isOnline =
     status === "Online" || status === "Active" || status === "Đang làm bài";
@@ -45,21 +55,54 @@ function StudentStatsCard({
       : parseInt((progress || "0%").replace("%", ""), 10) || 0;
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/90 p-4 shadow-xl hover:border-indigo-500/80 hover:bg-slate-900 transition-all cursor-pointer">
+    <div
+      className={`group relative flex flex-col justify-between rounded-2xl border bg-slate-900/90 p-4 shadow-xl transition-all cursor-pointer ${
+        needsHelp
+          ? "border-red-500 bg-red-950/20 shadow-red-500/20 animate-pulse"
+          : "border-slate-800 hover:border-indigo-500/80 hover:bg-slate-900"
+      }`}
+    >
       {/* Top Header: Name + Connection Status */}
       <div>
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-sm">
-              {studentName.charAt(0).toUpperCase()}
+              {mode === "group" ? (
+                <Users className="h-4 w-4" />
+              ) : (
+                studentName.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-sm text-white truncate">
-                {studentName}
+              <h3 className="font-bold text-sm text-white truncate flex items-center gap-1.5">
+                <span>{mode === "group" && teamName ? teamName : studentName}</span>
+                {mode === "group" && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-bold text-purple-300 border border-purple-500/30">
+                    👥 {members.length || 1} HS
+                  </span>
+                )}
+                {needsHelp && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDismissRaiseHand?.(e);
+                    }}
+                    className="inline-flex items-center gap-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-bounce shadow-md shadow-red-500/40 transition-colors"
+                    title="Click để tắt thông báo gọi hỗ trợ!"
+                  >
+                    ✋ Cần hỗ trợ
+                  </button>
+                )}
               </h3>
-              <span className="text-[11px] text-slate-400 font-mono">
-                ID: {studentId.slice(0, 6)}
-              </span>
+              {mode === "group" && members.length > 0 ? (
+                <div className="text-[11px] text-slate-400 truncate">
+                  {members.map((m) => m.name).join(", ")}
+                </div>
+              ) : (
+                <span className="text-[11px] text-slate-400 font-mono">
+                  ID: {studentId.slice(0, 6)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -152,6 +195,9 @@ export default React.memo(StudentStatsCard, (prevProps, nextProps) => {
     prevProps.status === nextProps.status &&
     prevProps.progress === nextProps.progress &&
     prevProps.score === nextProps.score &&
-    prevProps.warnings === nextProps.warnings
+    prevProps.warnings === nextProps.warnings &&
+    prevProps.mode === nextProps.mode &&
+    prevProps.teamName === nextProps.teamName &&
+    prevProps.members?.length === nextProps.members?.length
   );
 });

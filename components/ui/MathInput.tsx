@@ -44,7 +44,7 @@ export const MathInput: React.FC<MathInputProps> = ({
   }, [value, onChange]);
 
   return (
-    <div className={`math-input-wrapper w-full ${className}`}>
+    <div className={`math-input-wrapper w-full h-full flex items-center justify-center ${className}`}>
       {/* @ts-ignore - Web component */}
       <math-field ref={mfRef} virtual-keyboard-mode="manual">
         {/* Placeholder logic if needed */}

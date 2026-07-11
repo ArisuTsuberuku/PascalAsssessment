@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { debounce } from "lodash";
 import CanvasToolbar from "@/components/canvas/CanvasToolbar";
 import InteractiveCanvasItem from "@/components/canvas/InteractiveCanvasItem";
 import DrawingLayer from "@/components/canvas/DrawingLayer";
 import { Document, Page, pdfjs } from "react-pdf";
-import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-import "react-pdf/dist/esm/Page/TextLayer.css";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import { CanvasItem } from "@/types/assignment";
 import {
@@ -43,6 +42,13 @@ interface PageCanvasLayerProps {
   liveStudentData?: any;
   activeStudentTool?: string;
   activeSubmissionId?: string | null;
+  role?: "teacher" | "student";
+  studentAnnotations?: any[];
+  teacherAnnotations?: any[];
+  onTeacherAnnotationAdd?: (ann: any) => void;
+  onTeacherAnnotationRemove?: (id: string) => void;
+  isDrawingEnabled?: boolean;
+  mode?: "editor" | "session";
 }
 
 function PageCanvasLayer({
@@ -53,6 +59,13 @@ function PageCanvasLayer({
   liveStudentData = null,
   activeStudentTool = "pointer",
   activeSubmissionId = null,
+  role,
+  studentAnnotations,
+  teacherAnnotations,
+  onTeacherAnnotationAdd,
+  onTeacherAnnotationRemove,
+  isDrawingEnabled = false,
+  mode,
 }: PageCanvasLayerProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(850);
@@ -71,10 +84,10 @@ function PageCanvasLayer({
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.width > 0) {
-          setContainerWidth(entry.contentRect.width);
+          setContainerWidth(prev => prev !== entry.contentRect.width ? entry.contentRect.width : prev);
         }
         if (entry.contentRect.height > 0) {
-          setContainerHeight(entry.contentRect.height);
+          setContainerHeight(prev => prev !== entry.contentRect.height ? entry.contentRect.height : prev);
         }
       }
     });
@@ -147,10 +160,102 @@ function PageCanvasLayer({
   // If teacher is live monitoring, display the student's synced paths from Firebase
   const displayedPaths: DrawingPath[] = isLiveMonitor
     ? liveStudentData?.paths || liveStudentData?.drawings || []
-    : paths;
+    : [];
+
+  // 🎯 DEBOUNCE LOGIC FOR TEACHER INK
+  const incomingTeacherRaw = teacherAnnotations || liveStudentData?.teacherAnnotations || [];
+  const incomingTeacherStr = JSON.stringify(incomingTeacherRaw);
+  const incomingTeacher = React.useMemo(() => incomingTeacherRaw, [incomingTeacherStr]);
+  
+  const [localTeacherAnns, setLocalTeacherAnns] = useState<any[]>(incomingTeacher);
+  const pendingTeacherAnns = useRef<any[]>(incomingTeacher);
+  const hasPendingChanges = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!hasPendingChanges.current) {
+      setLocalTeacherAnns(incomingTeacher);
+      pendingTeacherAnns.current = incomingTeacher;
+    }
+  }, [incomingTeacher]);
+
+  const debouncedTeacherSync = useCallback(
+    debounce(async (targetId: string, currentStudent: any[], syncTeacherAnns: any[]) => {
+      try {
+        await updateDoc(doc(db, "student_submissions", targetId), {
+          teacherAnnotations: syncTeacherAnns,
+          studentAnnotations: currentStudent,
+          updatedAt: serverTimestamp(),
+        });
+        console.log("✅ [Debounced Sync] Teacher ink synced to Firestore!");
+        hasPendingChanges.current = false;
+      } catch (err) {
+        console.warn("Error updating teacher annotation in Firestore:", err);
+      }
+    }, 1000),
+    []
+  );
+
+  const handleTeacherAnnAdd = (newAnn: any) => {
+    newAnn.owner = "teacher";
+    if (onTeacherAnnotationAdd) {
+      onTeacherAnnotationAdd(newAnn);
+      return;
+    }
+    const targetId = liveStudentData?.id || activeSubmissionId;
+    if (!targetId) return;
+
+    hasPendingChanges.current = true;
+    const existingIdx = pendingTeacherAnns.current.findIndex((a: any) => a.id === newAnn.id);
+    const updated = [...pendingTeacherAnns.current];
+    if (existingIdx >= 0) {
+      updated[existingIdx] = newAnn;
+    } else {
+      updated.push(newAnn);
+    }
+    
+    pendingTeacherAnns.current = updated;
+    setLocalTeacherAnns(updated);
+
+    const currentStudent =
+      studentAnnotations ||
+      liveStudentData?.studentAnnotations ||
+      liveStudentData?.annotations ||
+      [];
+    
+    debouncedTeacherSync(targetId, currentStudent, updated);
+  };
+
+  const handleTeacherAnnRemove = (idToRemove: string) => {
+    if (onTeacherAnnotationRemove) {
+      onTeacherAnnotationRemove(idToRemove);
+      return;
+    }
+    const targetId = liveStudentData?.id || activeSubmissionId;
+    if (!targetId) return;
+
+    hasPendingChanges.current = true;
+    const updated = pendingTeacherAnns.current.filter(
+      (ann: any) => ann.id !== idToRemove
+    );
+    
+    pendingTeacherAnns.current = updated;
+    setLocalTeacherAnns(updated);
+
+    const currentStudent =
+      studentAnnotations ||
+      liveStudentData?.studentAnnotations ||
+      liveStudentData?.annotations ||
+      [];
+    const updatedStudent = currentStudent.filter(
+      (ann: any) => ann.id !== idToRemove
+    );
+
+    debouncedTeacherSync(targetId, updatedStudent, updated);
+  };
 
   return (
     <div
+      id={`pdf-page-${pageNum}`}
       ref={containerRef}
       onClick={() => setActivePdfPage(pageNum)}
       className="w-full max-w-[850px] aspect-[1000/1414] relative rounded-lg border border-slate-700 bg-slate-950 shadow-2xl overflow-hidden flex flex-col"
@@ -172,11 +277,24 @@ function PageCanvasLayer({
         width={containerWidth}
         height={containerHeight || Math.round(containerWidth * 1.414)}
         pageNumber={pageNum}
+        role={role}
+        studentAnnotations={
+          studentAnnotations ||
+          liveStudentData?.studentAnnotations ||
+          liveStudentData?.annotations ||
+          liveStudentData?.drawings ||
+          liveStudentData?.paths
+        }
+        teacherAnnotations={localTeacherAnns}
+        onTeacherAnnotationAdd={handleTeacherAnnAdd}
+        onTeacherAnnotationRemove={handleTeacherAnnRemove}
+        isDrawingEnabled={isDrawingEnabled}
+        mode={mode}
       />
 
       {/* REACT-RND INTERACTIVE OVERLAYS */}
-      <div className="absolute inset-0 z-30 pointer-events-none">
-        <div className="w-full h-full relative pointer-events-auto">
+      <div className="absolute inset-0 z-50 pointer-events-none">
+        <div className="w-full h-full relative pointer-events-none">
           {pageItems.map((item) => (
             <InteractiveCanvasItem
               key={item.id}
@@ -197,6 +315,13 @@ export interface PdfCanvasWrapperProps {
   isLiveMonitor?: boolean;
   initialData?: any;
   liveStudentData?: any;
+  role?: "teacher" | "student";
+  studentAnnotations?: any[];
+  teacherAnnotations?: any[];
+  isDrawingEnabled?: boolean;
+  mode?: "editor" | "session";
+  onToggleRaiseHand?: () => void;
+  needsHelp?: boolean;
 }
 
 export default function PdfCanvasWrapper({
@@ -206,6 +331,13 @@ export default function PdfCanvasWrapper({
   isLiveMonitor = false,
   initialData = null,
   liveStudentData = null,
+  role,
+  studentAnnotations,
+  teacherAnnotations,
+  isDrawingEnabled = false,
+  mode,
+  onToggleRaiseHand,
+  needsHelp,
 }: PdfCanvasWrapperProps = {}) {
   const {
     draft: storeDraft,
@@ -227,6 +359,76 @@ export default function PdfCanvasWrapper({
   const [numPages, setNumPages] = useState<number | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const activeTool = useAssignmentEditorStore((state) => state.activeTool);
+  const activeTargetingQuestionId = useAssignmentEditorStore((state) => state.activeTargetingQuestionId);
+
+  const handleTeacherAnnAdd = async (newAnn: any) => {
+    newAnn.owner = "teacher";
+    const targetId = liveStudentData?.id || activeSubmissionId;
+    if (!targetId) return;
+    const currentTeacher =
+      teacherAnnotations || liveStudentData?.teacherAnnotations || [];
+    const currentStudent =
+      studentAnnotations ||
+      liveStudentData?.studentAnnotations ||
+      liveStudentData?.annotations ||
+      [];
+    const existingIdx = currentTeacher.findIndex((a: any) => a.id === newAnn.id);
+    const updatedTeacher =
+      existingIdx >= 0
+        ? currentTeacher.map((a: any) => (a.id === newAnn.id ? newAnn : a))
+        : [...currentTeacher, newAnn];
+    try {
+      await updateDoc(doc(db, "student_submissions", targetId), {
+        teacherAnnotations: updatedTeacher,
+        studentAnnotations: currentStudent,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Lỗi đồng bộ ghi chú của giáo viên:", err);
+    }
+  };
+
+  const handleClearPage = async () => {
+    if (mode === "editor" || !isDrawingEnabled) {
+      useAssignmentEditorStore.getState().setAnnotations((prev) =>
+        prev.filter((ann) => ann.pageNumber !== activePdfPage)
+      );
+      return;
+    }
+
+    const targetId = liveStudentData?.id || activeSubmissionId;
+    if (!targetId) return;
+
+    if (confirm(role === "teacher" ? "Bạn có chắc chắn muốn xóa TOÀN BỘ nội dung (bài làm và ghi chú) trên trang này?" : "Bạn có chắc chắn muốn xóa tất cả bài làm của bạn trên trang này?")) {
+      try {
+        const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
+        if (role === "teacher") {
+          const currentTeacher = teacherAnnotations || liveStudentData?.teacherAnnotations || [];
+          const updatedTeacher = currentTeacher.filter((ann: any) => ann.pageNumber !== activePdfPage);
+          
+          const currentStudent = studentAnnotations || liveStudentData?.studentAnnotations || liveStudentData?.annotations || [];
+          const updatedStudent = currentStudent.filter((ann: any) => ann.pageNumber !== activePdfPage);
+
+          await updateDoc(doc(db, "student_submissions", targetId), {
+            teacherAnnotations: updatedTeacher,
+            studentAnnotations: updatedStudent,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          const currentStudent = studentAnnotations || liveStudentData?.studentAnnotations || liveStudentData?.annotations || [];
+          const updatedStudent = currentStudent.filter((ann: any) => ann.pageNumber !== activePdfPage);
+          await updateDoc(doc(db, "student_submissions", targetId), {
+            studentAnnotations: updatedStudent,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (err) {
+        console.error("Lỗi xóa ghi chú trên trang:", err);
+      }
+    }
+  };
 
   const allItems = draft?.sections?.flatMap((sec: any) => sec.items || []) || [];
   const totalQuestions = allItems.length;
@@ -311,8 +513,12 @@ export default function PdfCanvasWrapper({
     setFileError("Không thể hiển thị PDF. Vui lòng kiểm tra định dạng tệp.");
   };
 
+
+
   const getCursorClass = () => {
-    if (isLiveMonitor) return "cursor-default";
+    if (activeTool === "question_box" && activeTargetingQuestionId) return "cursor-crosshair";
+    if (mode === "editor" || isLiveMonitor || !isDrawingEnabled)
+      return "cursor-default";
     if (activeStudentTool === "pen" || activeStudentTool === "highlighter")
       return "cursor-crosshair";
     if (activeStudentTool === "text") return "cursor-text";
@@ -322,7 +528,7 @@ export default function PdfCanvasWrapper({
 
   return (
     <div
-      className={`w-full h-full overflow-y-auto bg-slate-900/60 p-6 md:p-8 flex flex-col items-center gap-6 relative ${getCursorClass()}`}
+      className={`pdf-scroll-container w-full h-full overflow-y-auto bg-slate-900/60 p-6 md:p-8 flex flex-col items-center gap-6 relative ${getCursorClass()}`}
     >
       {/* FLOATING STUDENT PROGRESS COUNTER BADGE */}
       {isPreviewMode && !isLiveMonitor && (
@@ -354,8 +560,16 @@ export default function PdfCanvasWrapper({
       )}
 
       {/* FLOATING CANVAS TOOLBAR */}
-      {!isLiveMonitor && (
-        <CanvasToolbar currentPageNumber={activePdfPage || 1} />
+      {(!isLiveMonitor || role === "teacher") && !readOnly && (
+        <CanvasToolbar
+          currentPageNumber={activePdfPage || 1}
+          role={role}
+          mode={mode || (isDrawingEnabled ? "session" : "editor")}
+          onTeacherAnnotationAdd={handleTeacherAnnAdd}
+          onToggleRaiseHand={onToggleRaiseHand}
+          needsHelp={needsHelp}
+          onClearPage={handleClearPage}
+        />
       )}
 
       {/* Top Banner */}
@@ -441,6 +655,11 @@ export default function PdfCanvasWrapper({
                   liveStudentData={liveStudentData}
                   activeStudentTool={activeStudentTool}
                   activeSubmissionId={activeSubmissionId}
+                  role={role}
+                  studentAnnotations={studentAnnotations}
+                  teacherAnnotations={teacherAnnotations}
+                  isDrawingEnabled={isDrawingEnabled}
+                  mode={mode || (isDrawingEnabled ? "session" : "editor")}
                 />
               );
             })}

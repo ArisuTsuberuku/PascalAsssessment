@@ -21,6 +21,7 @@ import {
   Copy,
   Pin,
   PlusSquare,
+  Crosshair,
 } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -32,6 +33,7 @@ export default function QuestionSidebar() {
     deleteItem,
     duplicateSidebarItem,
     isPreviewMode,
+    setActiveEssayId,
   } = useAssignmentEditorStore(
     useShallow((s) => ({
       draft: s.draft,
@@ -40,6 +42,7 @@ export default function QuestionSidebar() {
       deleteItem: s.deleteItem,
       duplicateSidebarItem: s.duplicateSidebarItem,
       isPreviewMode: s.isPreviewMode,
+      setActiveEssayId: s.setActiveEssayId,
     }))
   );
 
@@ -63,21 +66,21 @@ export default function QuestionSidebar() {
   });
 
   return (
-    <aside className="h-full w-full bg-slate-900 flex flex-col overflow-hidden">
+    <aside className="h-full w-full bg-[#f4fbf7] flex flex-col overflow-hidden text-slate-800">
       {/* Top Header */}
-      <div className="p-3.5 border-b border-slate-800 bg-slate-900/95 shrink-0">
+      <div className="p-3.5 border-b border-emerald-200 bg-white shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-bold text-white flex items-center gap-1.5">
-            <ListPlus className="h-4 w-4 text-purple-400" />
+          <h2 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <ListPlus className="h-4 w-4 text-emerald-600" />
             {isPreviewMode
               ? "Bài làm (Chế độ Học sinh)"
               : "Danh sách Câu hỏi Sidebar"}
           </h2>
-          <span className="rounded-full bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[11px] font-semibold text-purple-300">
+          <span className="rounded-full bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
             {sidebarItems.length} Câu
           </span>
         </div>
-        <p className="text-[10px] text-slate-400 mt-1">
+        <p className="text-[10px] text-slate-600 mt-1">
           {isPreviewMode
             ? "Trả lời các câu hỏi bên dưới."
             : "Các câu hỏi hiển thị cho học sinh trả lời ở bảng điều khiển bên phải."}
@@ -87,9 +90,9 @@ export default function QuestionSidebar() {
       {/* List of Sidebar Question Cards */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-3.5">
         {sidebarItems.length === 0 ? (
-          <div className="h-44 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-center p-4">
-            <HelpCircle className="h-7 w-7 text-slate-600 mb-2" />
-            <p className="text-xs font-semibold text-slate-400">
+          <div className="h-44 border-2 border-dashed border-emerald-200 rounded-xl flex flex-col items-center justify-center text-center p-4 bg-white">
+            <HelpCircle className="h-7 w-7 text-emerald-600 mb-2" />
+            <p className="text-xs font-semibold text-slate-500">
               Chưa có câu hỏi nào trong Sidebar
             </p>
           </div>
@@ -97,14 +100,14 @@ export default function QuestionSidebar() {
           sidebarItems.map((item, index) => (
             <div
               key={item.id}
-              className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-lg hover:border-slate-700 transition-all flex flex-col gap-3"
+              className="rounded-xl border border-emerald-200 bg-white p-3.5 shadow-md hover:border-emerald-300 transition-all flex flex-col gap-3"
             >
               {/* Card Header */}
               <div className="flex flex-col gap-2 mb-3">
                 <div className="flex flex-row items-center w-full gap-2">
                   {/* Left Side: Badge & Title (Takes remaining space, truncates if too long) */}
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="bg-purple-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">
+                    <span className="bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold shrink-0">
                       #{index + 1}
                     </span>
                     <input
@@ -114,28 +117,39 @@ export default function QuestionSidebar() {
                       onChange={(e) =>
                         updateItem(item.id, { name: e.target.value })
                       }
-                      className="bg-transparent font-semibold text-white text-sm border-b border-transparent hover:border-slate-700 focus:border-purple-500 focus:outline-none px-1 truncate w-full"
+                      className="bg-transparent font-semibold text-slate-800 text-sm border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none px-1 truncate w-full"
                     />
                   </div>
 
                   {/* Right Side: Actions & Points (Never shrinks) */}
-                  <div className="flex items-center gap-1 shrink-0 text-slate-400">
+                  <div className="flex items-center gap-1 shrink-0 text-slate-500">
                     {!isPreviewMode && (
                       <>
                         <button
                           type="button"
                           onClick={() => duplicateSidebarItem(item.id)}
                           title="Nhân bản câu hỏi"
-                          className="p-1 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                          className="p-1 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors"
                         >
                           <Copy size={14} />
                         </button>
                         <button
                           type="button"
                           title="Ghim / Đánh dấu"
-                          className="p-1 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                          className="p-1 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors"
                         >
                           <Pin size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            useAssignmentEditorStore.getState().setActiveTargetingQuestionId(item.id);
+                            useAssignmentEditorStore.getState().setActiveTool("question_box" as any);
+                          }}
+                          title="Chọn vùng trên PDF"
+                          className="p-1 hover:text-indigo-300 hover:bg-slate-700 rounded transition-colors text-indigo-400"
+                        >
+                          <Crosshair size={14} />
                         </button>
                         <button
                           type="button"
@@ -169,7 +183,10 @@ export default function QuestionSidebar() {
                             points: Number(e.target.value) || 0,
                           })
                         }
-                        className="w-8 h-5 bg-transparent text-[10px] text-white text-center focus:outline-none font-mono"
+                        style={{
+                          width: `${Math.max(String(item.points ?? "").length, 2) + 2}ch`,
+                        }}
+                        className="appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[40px] px-1 h-5 bg-transparent text-xs text-white text-center focus:outline-none font-mono"
                       />
                       <span className="text-[10px] ml-0.5 font-mono">đ</span>
                     </div>
@@ -177,27 +194,39 @@ export default function QuestionSidebar() {
                 </div>
               </div>
 
-              {/* Prompt Input */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] uppercase font-semibold text-slate-400">
-                  Đề bài / Yêu cầu
-                </label>
-                <textarea
-                  rows={2}
-                  readOnly={isPreviewMode}
-                  value={item.prompt || ""}
-                  onChange={(e) =>
-                    updateItem(item.id, { prompt: e.target.value })
-                  }
-                  placeholder="Nhập câu hỏi cho học sinh..."
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all resize-none"
-                />
-              </div>
+              {/* Prompt Section: Strict Conditional Rendering for Student View */}
+              {isPreviewMode ? (
+                item.prompt && item.prompt.trim() !== "" ? (
+                  <div className="flex flex-col gap-1 mb-2">
+                    <label className="text-[10px] uppercase font-semibold text-slate-500">
+                      Đề bài / Yêu cầu
+                    </label>
+                    <div className="text-xs text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200 whitespace-pre-wrap">
+                      {item.prompt}
+                    </div>
+                  </div>
+                ) : null
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-semibold text-slate-500">
+                    Đề bài / Yêu cầu
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={item.prompt || ""}
+                    onChange={(e) =>
+                      updateItem(item.id, { prompt: e.target.value })
+                    }
+                    placeholder="Nhập câu hỏi cho học sinh (để trống nếu đã có trên PDF)..."
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all resize-none"
+                  />
+                </div>
+              )}
 
               {/* Specific Config based on Type */}
               {item.type === "multiple-choice" && (
-                <div className="space-y-1.5 border-t border-slate-800/80 pt-2">
-                  <span className="text-[10px] font-semibold text-purple-300 uppercase">
+                <div className="space-y-1.5 border-t border-slate-100 pt-2">
+                  <span className="text-[10px] font-semibold text-emerald-700 uppercase">
                     Các lựa chọn:
                   </span>
                   {item.config.options.map((opt) => (
@@ -327,16 +356,22 @@ export default function QuestionSidebar() {
                   {!isPreviewMode ? (
                     <input
                       type="text"
-                      value={item.config.correctAnswers.join(", ")}
+                      value={
+                        item.config.correctAnswerText !== undefined
+                          ? item.config.correctAnswerText
+                          : (item.config.correctAnswers || []).join(", ")
+                      }
                       onChange={(e) => {
                         if (item.type !== "short-input") return;
-                        const answers = e.target.value
+                        const rawValue = e.target.value;
+                        const answers = rawValue
                           .split(",")
                           .map((s) => s.trim())
                           .filter(Boolean);
                         updateItem(item.id, {
                           config: {
                             ...item.config,
+                            correctAnswerText: rawValue,
                             correctAnswers:
                               answers.length > 0 ? answers : [""],
                           },
@@ -486,18 +521,19 @@ export default function QuestionSidebar() {
 
               {item.type === "essay" && (
                 <div className="space-y-2 border-t border-slate-800/80 pt-2">
-                  <textarea
-                    rows={3}
-                    readOnly={!isPreviewMode}
-                    value={studentAnswers[item.id] || ""}
-                    onChange={(e) => setStudentAnswer(item.id, e.target.value)}
-                    placeholder={
-                      isPreviewMode
-                        ? "Học sinh nhập bài tự luận tại đây..."
-                        : "Vùng trả lời tự luận (Học sinh sẽ nhập)..."
-                    }
-                    className="w-full rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 resize-none"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setActiveEssayId(item.id)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-indigo-500/50 bg-indigo-600/20 hover:bg-indigo-600/30 px-4 py-3 text-xs font-bold text-indigo-300 transition-all shadow-sm"
+                  >
+                    <span>📝</span>
+                    <span>Bấm vào đây để mở khung soạn thảo</span>
+                  </button>
+                  {Boolean(studentAnswers[item.id]) && (
+                    <div className="text-[11px] text-slate-400 italic line-clamp-2 bg-slate-900/60 p-2 rounded border border-slate-800">
+                      Đã soạn bài tự luận ({String(studentAnswers[item.id]).length} ký tự)
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -559,6 +595,32 @@ export default function QuestionSidebar() {
                   </div>
                 </div>
               )}
+              
+              {/* Jump to PDF button for Student View */}
+              {isPreviewMode && (item as any).boundingBox && (
+                <button
+                  onClick={() => {
+                    const handleJumpToPdf = (box: any) => {
+                      if (box.pageNumber) {
+                        useAssignmentEditorStore.getState().setActivePdfPage(box.pageNumber);
+                      }
+                      setTimeout(() => {
+                        const container = document.querySelector(".pdf-scroll-container");
+                        if (container) {
+                          container.scrollTo({
+                            top: box.top - 80,
+                            behavior: "smooth",
+                          });
+                        }
+                      }, 100);
+                    };
+                    handleJumpToPdf((item as any).boundingBox);
+                  }}
+                  className="mt-1 w-full flex items-center justify-center gap-2 bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600/20 py-2 px-4 rounded-md transition-colors text-xs font-semibold border border-indigo-500/20 shadow-sm"
+                >
+                  <span className="text-sm">🎯</span> Tới vùng làm bài trên PDF
+                </button>
+              )}
             </div>
           ))
         )}
@@ -566,56 +628,56 @@ export default function QuestionSidebar() {
 
       {/* BOTTOM TOOL RIBBON: 6 Pear Assessment Inspired Question Types */}
       {!isPreviewMode && (
-        <div className="p-3.5 border-t border-slate-800 bg-slate-950 shrink-0 max-h-[48%] overflow-y-auto shadow-2xl z-10">
-          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2.5">
+        <div className="p-3.5 border-t border-emerald-200 bg-white shrink-0 max-h-[48%] overflow-y-auto shadow-xl z-10">
+          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-2.5">
             Thêm câu hỏi Sidebar (Pear Assessment):
           </span>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => addSidebarItem("multiple-choice")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-purple-600/20 hover:border-purple-500/60 hover:text-purple-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <ListOrdered className="h-4 w-4 text-purple-400 shrink-0" />
+              <ListOrdered className="h-4 w-4 text-emerald-600 shrink-0" />
               <span className="truncate">Trắc nghiệm</span>
             </button>
 
             <button
               onClick={() => addSidebarItem("short-input")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-sky-600/20 hover:border-sky-500/60 hover:text-sky-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <TextCursorInput className="h-4 w-4 text-sky-400 shrink-0" />
+              <TextCursorInput className="h-4 w-4 text-sky-600 shrink-0" />
               <span className="truncate">Trả lời ngắn</span>
             </button>
 
             <button
               onClick={() => addSidebarItem("drop-down")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-amber-600/20 hover:border-amber-500/60 hover:text-amber-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <ChevronDownSquare className="h-4 w-4 text-amber-400 shrink-0" />
+              <ChevronDownSquare className="h-4 w-4 text-amber-600 shrink-0" />
               <span className="truncate">Chọn từ danh sách</span>
             </button>
 
             <button
               onClick={() => addSidebarItem("math-input")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-indigo-600/20 hover:border-indigo-500/60 hover:text-indigo-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <Calculator className="h-4 w-4 text-indigo-400 shrink-0" />
+              <Calculator className="h-4 w-4 text-indigo-600 shrink-0" />
               <span className="truncate">Công thức</span>
             </button>
 
             <button
               onClick={() => addSidebarItem("true-false")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-emerald-600/20 hover:border-emerald-500/60 hover:text-emerald-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <CheckSquare className="h-4 w-4 text-emerald-400 shrink-0" />
+              <CheckSquare className="h-4 w-4 text-emerald-600 shrink-0" />
               <span className="truncate">Đúng / Sai</span>
             </button>
 
             <button
               onClick={() => addSidebarItem("essay")}
-              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-pink-600/20 hover:border-pink-500/60 hover:text-pink-300 transition-all active:scale-95"
+              className="inline-flex items-center justify-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all active:scale-95"
             >
-              <AlignLeft className="h-4 w-4 text-pink-400 shrink-0" />
+              <AlignLeft className="h-4 w-4 text-pink-600 shrink-0" />
               <span className="truncate">Tự luận</span>
             </button>
           </div>

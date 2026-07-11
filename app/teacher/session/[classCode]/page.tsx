@@ -34,6 +34,7 @@ import { getAssignment } from "@/services/assignmentService";
 import dynamic from "next/dynamic";
 import { useAssignmentEditorStore } from "@/store/useAssignmentEditorStore";
 import type { Item, Assignment } from "@/types/assignment";
+import { evaluateAnswer } from "@/lib/evaluateAnswer";
 
 const PdfCanvasWrapper = dynamic(
   () => import("@/components/canvas/PdfCanvasWrapper"),
@@ -64,7 +65,7 @@ export default function LiveSessionPage({ params }: PageProps) {
   const [assignmentData, setAssignmentData] = useState<Assignment | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "grid">("grid");
   const [sessionStatus, setSessionStatus] = useState<
-    "active" | "paused" | "closed" | "stopped"
+    "active" | "paused" | "closed" | "stopped" | "archived"
   >("active");
 
   const togglePause = async () => {
@@ -89,9 +90,9 @@ export default function LiveSessionPage({ params }: PageProps) {
     try {
       const batch = writeBatch(db);
 
-      // 1. Mark session as closed
+      // 1. Mark session as archived
       batch.update(doc(db, "sessions", params.classCode), {
-        status: "closed",
+        status: "archived",
       });
 
       // 2. Find all students currently in progress for this session
@@ -121,8 +122,11 @@ export default function LiveSessionPage({ params }: PageProps) {
   };
 
   useEffect(() => {
-    // Phase 1: Secure Session Creation (Teacher Side)
-    const ensureSessionExists = async () => {
+    let isMounted = true;
+    let unsubSession: () => void;
+
+    auth.authStateReady().then(async () => {
+      if (!isMounted) return;
       const user = auth.currentUser;
       if (!user?.uid) return;
       try {
@@ -138,25 +142,30 @@ export default function LiveSessionPage({ params }: PageProps) {
       } catch (e) {
         console.error("Error ensuring secure session doc:", e);
       }
-    };
-    ensureSessionExists();
 
-    const unsubSession = onSnapshot(
-      doc(db, "sessions", params.classCode),
-      (snapshot) => {
-        if (snapshot.exists() && snapshot.data()?.status) {
-          setSessionStatus(snapshot.data().status);
+      unsubSession = onSnapshot(
+        doc(db, "sessions", params.classCode),
+        (snapshot) => {
+          if (snapshot.exists() && snapshot.data()?.status) {
+            setSessionStatus(snapshot.data().status);
+          }
         }
-      }
-    );
-    return () => unsubSession();
+      );
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubSession) unsubSession();
+    };
   }, [params.classCode]);
 
   useEffect(() => {
-    const fetchAssignmentTotal = async () => {
+    let isMounted = true;
+    auth.authStateReady().then(async () => {
+      if (!isMounted) return;
       try {
         const assignment = await getAssignment(params.classCode);
-        if (assignment) {
+        if (assignment && isMounted) {
           setAssignmentData(assignment as Assignment);
           if (assignment.sections) {
             const items = assignment.sections.flatMap(
@@ -169,20 +178,27 @@ export default function LiveSessionPage({ params }: PageProps) {
       } catch (err) {
         console.error("Error fetching assignment totalQuestions:", err);
       }
+    });
+    return () => {
+      isMounted = false;
     };
-    fetchAssignmentTotal();
   }, [params.classCode]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let isMounted = true;
+    let unsubscribe: () => void;
 
-    const q = query(
-      collection(db, "student_submissions"),
-      where("sessionId", "==", params.classCode)
-    );
+    auth.authStateReady().then(() => {
+      if (!isMounted) return;
+      setLoading(true);
+      setError(null);
 
-    const unsubscribe = onSnapshot(
+      const q = query(
+        collection(db, "student_submissions"),
+        where("sessionId", "==", params.classCode)
+      );
+
+      unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const realData = snapshot.docs.map((doc) => ({
@@ -206,31 +222,67 @@ export default function LiveSessionPage({ params }: PageProps) {
         setLoading(false);
       }
     );
+    });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
   }, [params.classCode]);
+
+
+
+  const handleDismissRaiseHand = async (studentId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const docRef = doc(db, "student_submissions", studentId);
+      await updateDoc(docRef, { needsHelp: false });
+    } catch (error) {
+      console.error("Failed to dismiss raise hand:", error);
+    }
+  };
+
+  const calculateStudentScore = (s: any) => {
+    let total = 0;
+    for (const item of assignmentItems) {
+      const graded = s.gradedAnswers?.[item.id];
+      if (
+        graded &&
+        (graded.score !== undefined || graded.earnedPoints !== undefined)
+      ) {
+        total += Number(graded.score ?? graded.earnedPoints ?? 0);
+      } else {
+        const rawAns = s.answers?.[item.id];
+        total += evaluateAnswer(item, rawAns).score;
+      }
+    }
+    return `${Number(total.toFixed(2))}đ`;
+  };
 
   const session = { status: sessionStatus };
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 md:p-8 text-slate-100 relative">
+    <div className="min-h-screen bg-[#f4fbf7] p-6 md:p-8 text-slate-800 relative">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-6 mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-emerald-200 pb-6 mb-8 gap-4">
         <div>
           <Link
             href="/teacher/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors mb-2"
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Quay lại Dashboard</span>
           </Link>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
             <span>Giám sát Lớp học Trực tiếp (Live Statistics & Anti-Cheat)</span>
-            <span className="font-mono rounded-lg bg-indigo-500/20 px-3 py-1 text-base text-indigo-300 border border-indigo-500/30">
+            <span className="font-mono rounded-lg bg-emerald-100 px-3 py-1 text-base text-emerald-800 border border-emerald-300">
               {params.classCode}
             </span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             Lưới thẻ thống kê hiệu năng cao — Nhấp vào từng học sinh để xem Livestream 1-on-1 đồng bộ nét vẽ và câu trả lời
           </p>
         </div>
@@ -239,19 +291,29 @@ export default function LiveSessionPage({ params }: PageProps) {
           {/* Status Indicator */}
           <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 rounded-full border border-slate-800">
             <span className={`relative flex h-3 w-3`}>
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  session.status === "active" ? "bg-emerald-400" : "bg-amber-400"
-                }`}
-              ></span>
+              {session.status !== "archived" && (
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    session.status === "active" ? "bg-emerald-400" : "bg-amber-400"
+                  }`}
+                ></span>
+              )}
               <span
                 className={`relative inline-flex rounded-full h-3 w-3 ${
-                  session.status === "active" ? "bg-emerald-500" : "bg-amber-500"
+                  session.status === "active" 
+                    ? "bg-emerald-500" 
+                    : session.status === "archived"
+                      ? "bg-slate-500"
+                      : "bg-amber-500"
                 }`}
               ></span>
             </span>
             <span className="text-sm font-medium text-slate-300">
-              {session.status === "active" ? "Đang diễn ra" : "Đang tạm dừng"}
+              {session.status === "active" 
+                ? "Đang diễn ra" 
+                : session.status === "archived"
+                  ? "Đã kết thúc"
+                  : "Đang tạm dừng"}
             </span>
           </div>
 
@@ -296,7 +358,7 @@ export default function LiveSessionPage({ params }: PageProps) {
           {/* Close Button */}
           <button
             onClick={closeSessionAndForceSubmit}
-            disabled={session.status === "closed" || session.status === "stopped"}
+            disabled={session.status === "closed" || session.status === "stopped" || session.status === "archived"}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg hover:bg-rose-500/20 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg
@@ -313,7 +375,7 @@ export default function LiveSessionPage({ params }: PageProps) {
               <line x1="9" y1="9" x2="15" y2="15" />
               <line x1="15" y1="9" x2="9" y2="15" />
             </svg>
-            Thu bài ngay
+            Kết thúc & Thu bài
           </button>
 
           <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-2">
@@ -380,6 +442,7 @@ export default function LiveSessionPage({ params }: PageProps) {
             students={students}
             assignmentItems={assignmentItems}
             onSelectStudent={(s) => setSelectedStudent(s)}
+            onDismissRaiseHand={handleDismissRaiseHand}
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -407,11 +470,16 @@ export default function LiveSessionPage({ params }: PageProps) {
                   }
                   status={student.status || "Online"}
                   progress={`${progressPercent}%`}
-                  score={student.score || "Đang làm"}
+                  score={student.score || calculateStudentScore(student)}
                   warnings={student.warnings || 0}
                   answeredCount={answeredCount}
                   totalQuestions={totalQuestions}
                   answers={student?.answers}
+                  needsHelp={student.needsHelp}
+                  onDismissRaiseHand={(e) => handleDismissRaiseHand(student.id, e)}
+                  mode={student.mode}
+                  teamName={student.teamName}
+                  members={student.members}
                 />
               </div>
             );

@@ -32,6 +32,8 @@ interface AssignmentEditorState {
 
   activePdfPage: number;
   setActivePdfPage: (page: number) => void;
+  activeTool: string;
+  setActiveTool: (tool: string) => void;
   activeStudentTool: string;
   setActiveStudentTool: (tool: string) => void;
   activeColor: string;
@@ -50,10 +52,19 @@ interface AssignmentEditorState {
   redo: () => void;
   activeSubmissionId: string | null;
   setActiveSubmissionId: (id: string | null) => void;
+  activeEssayId: string | null;
+  setActiveEssayId: (id: string | null) => void;
+  activeTargetingQuestionId: string | null;
+  setActiveTargetingQuestionId: (id: string | null) => void;
   pdfPages: Record<number, any>;
   setPdfPage: (pageNumber: number, pageObj: any) => void;
   studentAnswers: Record<string, any>;
   setStudentAnswer: (itemId: string, answer: any) => void;
+  // Group Work State
+  sessionMode: "individual" | "group";
+  setSessionMode: (mode: "individual" | "group") => void;
+  groupMembers: Array<{ studentId: string; name: string; joinedAt: any }>;
+  setGroupMembers: (members: Array<{ studentId: string; name: string; joinedAt: any }>) => void;
   duplicateCanvasItem: (itemId: string) => void;
   duplicateSidebarItem: (itemId: string) => void;
 
@@ -93,11 +104,21 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
     undoStack: [],
     redoStack: [],
     activeSubmissionId: null,
+    activeEssayId: null,
+    activeTargetingQuestionId: null,
     pdfPages: {},
     studentAnswers: {},
+    sessionMode: "individual",
+    groupMembers: [],
     error: null,
 
     setActivePdfPage: (page: number) => set({ activePdfPage: page }),
+    setSessionMode: (mode: "individual" | "group") => set({ sessionMode: mode }),
+    setGroupMembers: (members) => set({ groupMembers: members }),
+    setActiveSubmissionId: (id: string | null) => set({ activeSubmissionId: id }),
+    setActiveEssayId: (id: string | null) => set({ activeEssayId: id }),
+    setActiveTargetingQuestionId: (id: string | null) => set({ activeTargetingQuestionId: id }),
+    setActiveTool: (tool: string) => set({ activeTool: tool }),
     setActiveStudentTool: (tool: string) => set({ activeStudentTool: tool }),
     setActiveColor: (color: string) => set({ activeColor: color }),
     setActiveStrokeWidth: (width: number) => set({ activeStrokeWidth: width }),
@@ -136,7 +157,6 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
           annotations: next,
         };
       }),
-    setActiveSubmissionId: (id: string | null) => set({ activeSubmissionId: id }),
     setPdfPage: (pageNumber: number, pageObj: any) =>
       set((state) => ({
         pdfPages: { ...state.pdfPages, [pageNumber]: pageObj },
@@ -200,6 +220,9 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
         isPdfChanged: false,
         isLoading: false,
         error: null,
+        annotations: [],
+        undoStack: [],
+        redoStack: [],
       });
     },
 
@@ -216,6 +239,9 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
         isPdfChanged: false,
         isLoading: false,
         error: null,
+        annotations: [],
+        undoStack: [],
+        redoStack: [],
       });
     },
 
@@ -266,6 +292,9 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
         isLoading: false,
         isSaving: false,
         error: null,
+        annotations: [],
+        undoStack: [],
+        redoStack: [],
       });
     },
 
@@ -471,7 +500,34 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
             0
           ) + 1;
         const newItemId = `item-canvas-${Date.now()}`;
-        const defaultBox = { x: 100, y: 100, width: 300, height: 150 };
+        const getDefaultBox = (itemType: ItemType) => {
+          switch (itemType) {
+            case "math-input":
+              return { x: 100, y: 100, width: 200, height: 60 };
+            case "drag-and-drop":
+            case "drag-drop-zone":
+            case "fill-in-the-blanks":
+              return { x: 100, y: 100, width: 300, height: 100 };
+            case "classification":
+              return { x: 100, y: 100, width: 350, height: 180 };
+            case "matching":
+              return { x: 100, y: 100, width: 350, height: 150 };
+            case "re-sequence":
+              return { x: 100, y: 100, width: 300, height: 150 };
+            case "short-input":
+            case "drop-down":
+            case "true-false":
+              return { x: 100, y: 100, width: 150, height: 40 };
+            case "multiple-choice":
+              return { x: 100, y: 100, width: 180, height: 50 };
+            case "essay":
+            case "drawing":
+              return { x: 100, y: 100, width: 250, height: 120 };
+            default:
+              return { x: 100, y: 100, width: 150, height: 40 };
+          }
+        };
+        const defaultBox = getDefaultBox(type);
 
         let newItem: CanvasItem;
         switch (type) {
@@ -1002,7 +1058,6 @@ export const useAssignmentEditorStore = create<AssignmentEditorState>()(
     name: "student-exam-storage",
     partialize: (state) => ({
       studentAnswers: state.studentAnswers,
-      annotations: state.annotations,
     }),
   }
 ));

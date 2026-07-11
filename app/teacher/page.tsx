@@ -70,28 +70,28 @@ export default function TeacherLoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-950 to-slate-900">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-[#f4fbf7] to-white">
       <Link
         href="/"
-        className="absolute top-6 left-6 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+        className="absolute top-6 left-6 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
         Quay lại Trang chủ
       </Link>
 
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-xl">
+      <div className="w-full max-w-md rounded-2xl border border-emerald-100 bg-white p-8 shadow-xl">
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/40">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
             <GraduationCap className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Đăng nhập Giáo viên</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-slate-800">Đăng nhập Giáo viên</h1>
+          <p className="text-slate-600 text-sm mt-1">
             Quản lý bài giảng, tài liệu PDF và theo dõi lớp học
           </p>
         </div>
 
         {errorMsg && (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-400">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-center text-sm text-red-600">
             {errorMsg}
           </div>
         )}
@@ -101,7 +101,7 @@ export default function TeacherLoginPage() {
           type="button"
           onClick={handleGoogleLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 shadow-md transition-all hover:bg-slate-100 active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-800 shadow-sm transition-all hover:bg-slate-50 active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {loading ? (
             <Loader2 className="h-5 w-5 animate-spin text-slate-700" />
@@ -116,24 +116,10 @@ export default function TeacherLoginPage() {
           <span>Tiếp tục với Google</span>
         </button>
 
-        {/* Local Dev Mode Section */}
-        <div className="mt-5 pt-5 border-t border-slate-800/80">
-          <button
-            type="button"
-            onClick={handleLocalDevLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-2.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition-all disabled:opacity-50"
-          >
-            <Code2 className="h-4 w-4 text-indigo-400" />
-            <span>Đăng xuất/Đăng nhập Local Dev Mode (Không cần domain)</span>
-          </button>
-          <p className="mt-2 text-[11px] text-slate-500 text-center leading-relaxed">
-            Dành cho môi trường Local (localhost / 127.0.0.1) tự động cấp quyền tài khoản test để kiểm thử chức năng lưu/tạo bài thi.
-          </p>
-        </div>
+
 
         <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
-          <ShieldCheck className="h-4 w-4 text-indigo-400" />
+          <ShieldCheck className="h-4 w-4 text-emerald-600" />
           <span>Bảo mật bởi Firebase Authentication</span>
         </div>
       </div>

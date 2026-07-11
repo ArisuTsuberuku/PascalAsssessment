@@ -66,12 +66,13 @@ export default function InteractiveCanvasItem({
           y: virtualY,
         });
       }}
-      className={`border-2 rounded-md bg-transparent absolute group z-30 ${isPreviewMode
-        ? "border-transparent"
-        : isPinned
+      className={`border-2 rounded-md absolute group z-50 pointer-events-auto ${
+        isPreviewMode
+          ? "border-transparent"
+          : isPinned
           ? "border-amber-500"
           : "border-indigo-500"
-        }`}
+      }`}
     >
       {/* Header (Drag Handle & Pin Control) - Absolutely positioned above the box */}
       {!isPreviewMode && (
@@ -100,7 +101,10 @@ export default function InteractiveCanvasItem({
                 })
               }
               onClick={(e) => e.stopPropagation()}
-              className="w-14 h-5 text-xs text-black rounded px-1 font-bold focus:outline-none"
+              style={{
+                width: `${Math.max(String(item.config?.points || item.points || "").length, 1) + 2}ch`,
+              }}
+              className="appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none min-w-[40px] h-5 text-xs text-black rounded px-1 font-bold focus:outline-none text-center"
               title="Điểm"
             />
 

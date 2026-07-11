@@ -19,6 +19,7 @@ import MathLiveInput from "./MathLiveInput";
 import MatchingQuestionRenderer from "./MatchingQuestionRenderer";
 import TextareaAutosize from "react-textarea-autosize";
 import { MathInput } from "@/components/ui/MathInput";
+import RichTextModal from "@/components/live/RichTextModal";
 
 export const FROSTED_GLASS_CLASS =
   "bg-white/80 backdrop-blur-md border border-indigo-300 rounded-md text-indigo-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 p-2 min-h-[40px] w-full h-full flex items-center";
@@ -180,6 +181,9 @@ export default function CanvasItemRenderer({
   const setStudentAnswer = useAssignmentEditorStore(
     (state) => state.setStudentAnswer
   );
+  const setActiveEssayId = useAssignmentEditorStore(
+    (state) => state.setActiveEssayId
+  );
   const [studentState, setStudentState] = React.useState<any>({});
 
   React.useEffect(() => {
@@ -192,7 +196,7 @@ export default function CanvasItemRenderer({
   const rootPos = (config as any).position || { x: 4, y: 4 };
   const rootSize = (config as any).size || { width: "auto", height: "auto" };
 
-  switch (item.type) {
+  switch (item.type as string) {
     case "multiple-choice": {
       const correctHash = (config as any).correctHash || "opt-a";
       const defaultOptions: MultipleChoiceOption[] = [
@@ -602,7 +606,7 @@ export default function CanvasItemRenderer({
                   <GripVertical size={16} />
                 </div>
               )}
-              <div className="flex-1 min-w-0 flex items-center px-2 py-1">
+              <div className="flex-1 min-w-0 w-full h-full flex items-center justify-center px-2 py-1">
                 <MathInput
                   value={
                     isPreviewMode ? studentState.text || "" : correctMathjs
@@ -754,50 +758,25 @@ export default function CanvasItemRenderer({
       );
     }
 
-    case "essay": {
+    case "essay":
+    case "tự luận": {
+      const currentAnswer = studentAnswers[item.id] || "";
       return (
-        <div className="w-full h-full relative overflow-hidden">
-          <Rnd
-            bounds="parent"
-            dragGrid={[10, 10]}
-            enableResizing={isPinned}
-            disableDragging={!isPinned}
-            dragHandleClassName="drag-handle"
-            position={{ x: rootPos.x, y: rootPos.y }}
-            size={rootSize}
-            onDragStop={(e, d) => {
-              updateCanvasItemConfig(item.id, {
-                position: { x: Math.round(d.x), y: Math.round(d.y) },
-              });
-            }}
-            onResizeStop={(e, direction, ref, delta, position) => {
-              updateCanvasItemConfig(item.id, {
-                size: { width: ref.style.width, height: ref.style.height },
-                position: {
-                  x: Math.round(position.x),
-                  y: Math.round(position.y),
-                },
-              });
-            }}
-            className="z-10 min-w-[160px] min-h-[60px]"
-          >
-            <div className="flex flex-row items-stretch bg-white/80 backdrop-blur-md border border-indigo-300 rounded-md text-indigo-900 shadow-sm overflow-hidden w-full h-full focus-within:ring-2 focus-within:ring-indigo-400">
-              {isPinned && !isPreviewMode && (
-                <div
-                  title="Kéo di chuyển vùng tự luận"
-                  className="drag-handle cursor-grab active:cursor-grabbing flex items-center justify-center px-2 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-100 transition-colors border-r border-indigo-200/50 shrink-0"
-                >
-                  <GripVertical size={16} />
-                </div>
-              )}
-              <textarea
-                disabled
-                placeholder="Vùng học sinh viết tự luận"
-                className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 p-2.5 resize-none text-xs font-semibold placeholder:text-slate-500 select-none cursor-default min-w-0"
-              />
-            </div>
-          </Rnd>
-        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setActiveEssayId(item.id);
+          }}
+          className="w-full h-full bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 border-dashed rounded flex flex-col items-center justify-center text-indigo-500 cursor-pointer p-2 overflow-hidden"
+        >
+          <span className="text-xl mb-1">📝</span>
+          <span className="text-xs font-semibold text-center">
+            {currentAnswer
+              ? "Đã soạn bài. Bấm để sửa..."
+              : "Bấm vào đây để làm bài tự luận"}
+          </span>
+        </button>
       );
     }
 
@@ -1301,11 +1280,8 @@ export default function CanvasItemRenderer({
           })}
 
           {/* Word Bank Bottom Section */}
-          <div className="absolute bottom-1.5 left-2 right-2 z-20 flex items-center justify-between gap-2 bg-slate-900/85 backdrop-blur-sm border border-slate-700 rounded-full px-3 py-1 shadow-md">
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full">
-              <span className="text-[10px] font-bold text-slate-300 shrink-0">
-                Word Bank:
-              </span>
+          <div className="absolute bottom-1.5 left-2 right-2 z-20 flex items-center justify-between gap-2 bg-slate-900/85 backdrop-blur-sm border border-slate-700 rounded-xl px-2 py-1 shadow-md">
+            <div className="flex flex-wrap gap-1 w-full h-full p-1 items-center">
               {wordBankItems.map((wb) => (
                 <div
                   key={wb.id}
@@ -1394,9 +1370,9 @@ export default function CanvasItemRenderer({
       };
 
       return (
-        <div className="!h-auto !w-fit min-w-[300px] relative overflow-hidden p-1.5 flex flex-col gap-1.5 bg-transparent">
+        <div className="w-full h-full relative overflow-hidden p-1.5 flex flex-col bg-transparent">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-indigo-900 drop-shadow-sm">
+            <span className="text-[10px] leading-tight mb-1 text-slate-500 drop-shadow-sm">
               {isPreviewMode
                 ? "Kéo thả để sắp xếp đúng thứ tự:"
                 : "Sắp xếp theo thứ tự đúng:"}
@@ -1576,10 +1552,10 @@ export default function CanvasItemRenderer({
       );
 
       return (
-        <div className="w-full h-full relative overflow-hidden p-1.5 flex flex-col gap-2 bg-white/70 backdrop-blur-sm rounded-lg border border-indigo-200">
+        <div className="w-full h-full relative overflow-hidden p-1.5 flex flex-col bg-white/70 backdrop-blur-sm rounded-lg border border-slate-200">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-indigo-200 pb-1">
-            <span className="text-[10px] font-bold text-indigo-900">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-1 mb-1">
+            <span className="text-[10px] leading-tight text-slate-500">
               {isPreviewMode
                 ? "Kéo thả mục vào đúng nhóm phân loại:"
                 : "Thiết lập nhóm phân loại (Kéo thả mục vào nhóm):"}

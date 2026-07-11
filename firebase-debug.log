@@ -1,0 +1,16 @@
+[debug] [2026-07-11T14:31:52.551Z] ----------------------------------------------------------------------
+[debug] [2026-07-11T14:31:52.552Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\ADMIN\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy
+[debug] [2026-07-11T14:31:52.552Z] CLI Version:   15.15.0
+[debug] [2026-07-11T14:31:52.552Z] Platform:      win32
+[debug] [2026-07-11T14:31:52.552Z] Node Version:  v24.14.1
+[debug] [2026-07-11T14:31:52.552Z] Time:          Sat Jul 11 2026 21:31:52 GMT+0700 (Giờ Đông Dương)
+[debug] [2026-07-11T14:31:52.552Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-11T14:31:53.584Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-11T14:31:53.584Z] > authorizing via signed-in user (underworldkirito@gmail.com)
+[debug] [2026-07-11T14:31:53.584Z] [iam] checking project pascalassessmentsys for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebase.projects.update","firebaseauth.configs.update","firebasehosting.sites.update","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]
+[debug] [2026-07-11T14:31:53.585Z] Checked if tokens are valid: true, expires at: 1783783897285
+[debug] [2026-07-11T14:31:53.585Z] Checked if tokens are valid: true, expires at: 1783783897285
+[debug] [2026-07-11T14:31:53.585Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pascalassessmentsys:testIamPermissions [none]
+[debug] [2026-07-11T14:31:53.585Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pascalassessmentsys:testIamPermissions  x-goog-user-project=pascalassessmentsys
+[debug] [2026-07-11T14:31:53.585Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pascalassessmentsys:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebase.projects.update","firebaseauth.configs.update","firebasehosting.sites.update","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}

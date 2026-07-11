@@ -35,6 +35,7 @@ export interface MathInputConfig {
 
 export interface ShortInputConfig {
   correctAnswers: string[];
+  correctAnswerText?: string;
   caseSensitive?: boolean;
   points?: number;
   position?: { x: number; y: number };
@@ -479,16 +480,25 @@ export interface Assignment {
 
 export interface Annotation {
   id: string;
-  type: "line" | "text";
-  tool: string; // 'pen' | 'highlighter' | 'eraser' | 'line' | 'text'
+  type: "line" | "text" | "image";
+  tool: string; // 'pen' | 'highlighter' | 'eraser' | 'line' | 'text' | 'image' | 'sticker'
   points?: number[];
-  color: string;
+  color?: string;
   strokeWidth?: number;
   pageNumber?: number;
   x?: number;
   y?: number;
+  width?: number;
+  height?: number;
+  imageUrl?: string;
   text?: string;
   fontSize?: number;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  owner?: "teacher" | "student";
+  selectable?: boolean;
+  evented?: boolean;
+  hasControls?: boolean;
 }
 
 export type SessionStatus = "active" | "paused" | "closed" | "stopped";

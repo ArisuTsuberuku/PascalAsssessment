@@ -4,7 +4,19 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30;
+    @apply bg-slate-50 text-slate-800 antialiased selection:bg-emerald-500/20;
+    /* Standard Arrow: White fill, Black stroke */
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L5.5 3.21z" fill="white" stroke="black" stroke-width="1.5" stroke-linejoin="round"/></svg>'), auto;
+  }
+  
+  /* Preserve pointer for clickable elements */
+  button, a, [role="button"], .cursor-pointer {
+    cursor: pointer; 
+  }
+  
+  /* Preserve text selection cursor */
+  input, textarea, .cursor-text {
+    cursor: text;
   }
 }
 
@@ -22,8 +34,8 @@
 }
 
 .math-input-wrapper math-field:focus-within {
-  border-color: #6d28d9; /* Purple ring */
-  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+  border-color: #059669; /* Emerald ring */
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
 }
 
 /* Style the virtual keyboard if it pops up */
