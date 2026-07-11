@@ -16,54 +16,16 @@ export default function TeacherLoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showDevNotice, setShowDevNotice] = useState(false);
-
   const handleGoogleLogin = async () => {
     setLoading(true);
     setErrorMsg(null);
-    setShowDevNotice(false);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       router.push("/teacher/dashboard");
     } catch (error: any) {
       console.error("Firebase Google Login Error:", error);
-      if (error?.code === "auth/unauthorized-domain") {
-        setErrorMsg(
-          "Tên miền Local (localhost/127.0.0.1) chưa có trong danh sách Authorized Domains của Firebase Console. Vui lòng sử dụng Đăng nhập Local Dev Mode bên dưới để kiểm thử."
-        );
-        setShowDevNotice(true);
-      } else {
-        setErrorMsg(error?.message || "Đăng nhập Google thất bại. Vui lòng thử lại.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLocalDevLogin = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    const devEmail = "dev@pascal.edu.vn";
-    const devPass = "pascal123456";
-
-    try {
-      try {
-        await signInWithEmailAndPassword(auth, devEmail, devPass);
-      } catch (err: any) {
-        if (
-          err?.code === "auth/user-not-found" ||
-          err?.code === "auth/invalid-credential"
-        ) {
-          await createUserWithEmailAndPassword(auth, devEmail, devPass);
-        } else {
-          throw err;
-        }
-      }
-      router.push("/teacher/dashboard");
-    } catch (error: any) {
-      console.error("Dev login error:", error);
-      setErrorMsg("Lỗi đăng nhập Dev Mode: " + (error?.message || error));
+      setErrorMsg(error?.message || "Đăng nhập Google thất bại. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
